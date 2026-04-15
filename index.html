@@ -1,0 +1,2760 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=375,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>幸运抽奖机</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{
+  width:100vw;min-height:100vh;background:#04020c;overflow-y:auto;overflow-x:hidden;
+  font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;
+  display:flex;align-items:flex-start;justify-content:center;user-select:none;
+}
+#bg-canvas{position:fixed;inset:0;pointer-events:none;z-index:0;}
+
+/* ══ 舞台 ══ */
+#stage{
+  position:relative;z-index:1;
+  width:375px;min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;
+  overflow:visible;
+  background:radial-gradient(ellipse 300px 220px at 50% 40%,rgba(80,20,200,0.22) 0%,transparent 70%),
+    linear-gradient(180deg,#080514 0%,#04020c 100%);
+  transition:background 1.2s ease;
+  padding-bottom:32px;
+}
+#stage.phase-spin{
+  background:radial-gradient(ellipse 340px 240px at 50% 40%,rgba(120,40,255,0.35) 0%,transparent 70%),
+    linear-gradient(180deg,#0d0520 0%,#04020c 100%);
+}
+#stage.phase-flash{
+  background:radial-gradient(ellipse 360px 280px at 50% 40%,rgba(255,200,0,0.3) 0%,transparent 65%),
+    linear-gradient(180deg,#1a1000 0%,#04020c 100%);
+}
+
+/* ══ 顶部标题 ══ */
+#title-area{
+  position:relative;z-index:5;margin-top:18px;text-align:center;
+  opacity:0;transform:translateY(-14px);
+  transition:all 0.6s cubic-bezier(0.34,1.56,0.64,1);
+}
+#title-area.show{opacity:1;transform:translateY(0);}
+#title-main{
+  font-size:22px;font-weight:900;letter-spacing:2px;
+  color:#FFE066;  /* fallback */
+  filter:drop-shadow(0 0 14px rgba(255,180,0,0.75));
+}
+#title-main .title-text{
+  background:linear-gradient(135deg,#fff 0%,#FFE066 45%,#FF9900 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#title-sub{
+  font-size:12px;color:rgba(200,160,255,0.65);
+  margin-top:5px;letter-spacing:1px;
+  transition:all 0.4s ease;
+}
+
+/* ══ 抽奖机主体 ══ */
+#machine-wrap{
+  position:relative;z-index:5;
+  margin-top:10px;
+  width:320px;
+  overflow:visible;
+  padding-bottom:100px;
+  opacity:0;transform:scale(0.88) translateY(20px);
+  transition:all 0.7s cubic-bezier(0.34,1.56,0.64,1);
+}
+#machine-wrap.show{opacity:1;transform:scale(1) translateY(0);}
+
+/* 机器外壳 */
+#machine-body{
+  position:relative;
+  width:280px;height:240px;
+  border-radius:28px 28px 20px 20px;
+  background:linear-gradient(160deg,#2a1060 0%,#180840 50%,#0e0530 100%);
+  border:2px solid rgba(160,80,255,0.6);
+  box-shadow:
+    0 0 40px rgba(120,40,255,0.4),
+    0 0 80px rgba(80,20,200,0.2),
+    inset 0 2px 0 rgba(255,255,255,0.1),
+    inset 0 -2px 0 rgba(0,0,0,0.3);
+  overflow:hidden;
+}
+/* 机器顶部装饰灯 */
+#machine-top-lights{
+  position:absolute;top:0;left:0;right:0;height:8px;
+  display:flex;gap:0;overflow:hidden;border-radius:28px 28px 0 0;
+}
+.top-light{
+  flex:1;height:100%;
+  animation:topLightBlink 1.2s ease-in-out infinite;
+}
+.top-light:nth-child(1){background:#ff4466;animation-delay:0s;}
+.top-light:nth-child(2){background:#ffaa00;animation-delay:0.15s;}
+.top-light:nth-child(3){background:#44ff88;animation-delay:0.3s;}
+.top-light:nth-child(4){background:#44aaff;animation-delay:0.45s;}
+.top-light:nth-child(5){background:#aa44ff;animation-delay:0.6s;}
+.top-light:nth-child(6){background:#ff4466;animation-delay:0.75s;}
+.top-light:nth-child(7){background:#ffaa00;animation-delay:0.9s;}
+.top-light:nth-child(8){background:#44ff88;animation-delay:1.05s;}
+@keyframes topLightBlink{
+  0%,100%{opacity:1;filter:brightness(1);}
+  50%{opacity:0.4;filter:brightness(0.5);}
+}
+
+/* 机器标牌 */
+#machine-sign{
+  position:absolute;top:16px;left:50%;transform:translateX(-50%);
+  background:linear-gradient(135deg,#FFD700,#FF9900,#FFD700);
+  background-size:200% 100%;
+  animation:signShimmer 2s linear infinite;
+  border-radius:8px;padding:4px 18px;
+  font-size:13px;font-weight:900;color:#1a0800;
+  letter-spacing:2px;white-space:nowrap;
+  box-shadow:0 2px 12px rgba(255,160,0,0.6);
+}
+@keyframes signShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* 球体容器（透明玻璃球仓） */
+#ball-chamber{
+  position:absolute;top:40px;left:20px;right:20px;bottom:50px;
+  border-radius:16px;
+  background:rgba(0,0,0,0.35);
+  border:1.5px solid rgba(160,80,255,0.3);
+  overflow:hidden;
+  box-shadow:inset 0 0 30px rgba(0,0,0,0.5),inset 0 2px 0 rgba(255,255,255,0.06);
+}
+/* 玻璃反光 */
+#ball-chamber::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:40%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.06) 0%,transparent 100%);
+  border-radius:16px 16px 0 0;pointer-events:none;z-index:10;
+}
+/* 底部出球口 */
+#ball-chamber::after{
+  content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:50px;height:12px;
+  background:linear-gradient(180deg,rgba(0,0,0,0.6),rgba(0,0,0,0.9));
+  border-radius:0 0 8px 8px;
+  border-top:1px solid rgba(160,80,255,0.3);
+}
+
+/* 漂浮球体（待机态） */
+.idle-ball{
+  position:absolute;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0px;
+  overflow:hidden;
+  animation:ballFloat var(--dur) ease-in-out infinite var(--delay);
+  box-shadow:0 4px 16px rgba(0,0,0,0.4),inset 0 -3px 8px rgba(0,0,0,0.3),inset 0 3px 8px rgba(255,255,255,0.2);
+  transition:opacity 0.3s;
+}
+/* 球内 icon */
+.ball-icon{
+  font-size:14px;
+  line-height:1;
+  position:relative;z-index:2;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+/* 球内数量标签 */
+.ball-label{
+  font-size:9px;
+  font-weight:900;
+  color:#fff;
+  line-height:1;
+  position:relative;z-index:2;
+  text-shadow:0 1px 3px rgba(0,0,0,0.8),0 0 6px rgba(0,0,0,0.6);
+  letter-spacing:0.3px;
+  margin-top:1px;
+  white-space:nowrap;
+}
+@keyframes ballFloat{
+  0%,100%{transform:translate(0,0) rotate(0deg);}
+  25%{transform:translate(var(--fx),var(--fy)) rotate(var(--fr));}
+  50%{transform:translate(calc(var(--fx)*-0.6),calc(var(--fy)*0.8)) rotate(calc(var(--fr)*-0.5));}
+  75%{transform:translate(calc(var(--fx)*0.4),calc(var(--fy)*-0.6)) rotate(var(--fr));}
+}
+
+/* 碰撞球（抽奖态）—— 复用 ball-icon / ball-label，需要 flex 布局 */
+.chaos-ball{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+
+/* 滚动轨道（抽奖时显示） */
+#spin-track{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;
+  overflow:hidden;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.3s;
+}
+#spin-track.active{opacity:1;}
+#spin-items{
+  display:flex;flex-direction:column;
+  align-items:center;
+  gap:8px;
+  padding:10px 0;
+  /* translateY 由JS控制 */
+  will-change:transform;
+}
+.spin-item{
+  width:52px;height:52px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:24px;flex-shrink:0;
+  box-shadow:0 4px 16px rgba(0,0,0,0.4),inset 0 -3px 8px rgba(0,0,0,0.3),inset 0 3px 8px rgba(255,255,255,0.2);
+}
+
+/* 中心高亮线（选中框） */
+#spin-selector{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:68px;height:68px;border-radius:50%;
+  border:2.5px solid rgba(255,220,60,0.9);
+  box-shadow:0 0 20px rgba(255,200,0,0.7),inset 0 0 20px rgba(255,200,0,0.15);
+  pointer-events:none;opacity:0;
+  transition:opacity 0.3s;
+  z-index:5;
+}
+#spin-selector.show{opacity:1;}
+
+/* 机器底部出口管道 */
+#machine-tube{
+  position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:60px;height:60px;
+  background:linear-gradient(180deg,#1a0840,#0e0530);
+  border:1.5px solid rgba(160,80,255,0.4);
+  border-top:none;
+  border-radius:0 0 12px 12px;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+#machine-tube::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(
+    90deg,transparent,transparent 8px,rgba(160,80,255,0.08) 8px,rgba(160,80,255,0.08) 9px
+  );
+}
+
+/* ══ 抽奖按钮区 ══ */
+#lever-area{
+  position:absolute;
+  /* 居中在机器底部 */
+  left:50%;
+  bottom:-88px;
+  transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;
+  cursor:pointer;
+  z-index:50;
+  width:160px;
+}
+/* 隐藏旧摇杆元素 */
+#lever-base,#lever-rod-wrap,#lever-rod,#lever-ball{display:none;}
+/* 抽奖按钮主体 */
+#lever-btn{
+  width:160px;height:52px;
+  border-radius:26px;
+  background:linear-gradient(135deg,#ff6b35 0%,#f7c948 50%,#ff6b35 100%);
+  background-size:200% 200%;
+  border:none;outline:none;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  font-size:18px;font-weight:900;color:#fff;
+  letter-spacing:1.5px;
+  text-shadow:0 1px 4px rgba(0,0,0,0.4);
+  box-shadow:
+    0 0 24px rgba(255,160,40,0.7),
+    0 0 48px rgba(255,100,20,0.35),
+    0 6px 16px rgba(0,0,0,0.45),
+    inset 0 2px 0 rgba(255,255,255,0.35),
+    inset 0 -3px 0 rgba(0,0,0,0.25);
+  animation:drawBtnPulse 2s ease-in-out infinite;
+  transition:transform 0.12s ease,box-shadow 0.12s ease;
+  cursor:pointer;
+  position:relative;overflow:hidden;
+}
+#lever-btn::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.18) 50%,transparent 100%);
+  animation:drawBtnShine 2.4s linear infinite;
+}
+@keyframes drawBtnShine{
+  0%{transform:translateX(-100%);}100%{transform:translateX(200%);}
+}
+@keyframes drawBtnPulse{
+  0%,100%{
+    transform:scale(1);
+    box-shadow:0 0 24px rgba(255,160,40,0.7),0 0 48px rgba(255,100,20,0.35),0 6px 16px rgba(0,0,0,0.45),inset 0 2px 0 rgba(255,255,255,0.35),inset 0 -3px 0 rgba(0,0,0,0.25);
+  }
+  50%{
+    transform:scale(1.07);
+    box-shadow:0 0 44px rgba(255,200,60,1),0 0 88px rgba(255,140,20,0.65),0 8px 20px rgba(0,0,0,0.45),inset 0 2px 0 rgba(255,255,255,0.35),inset 0 -3px 0 rgba(0,0,0,0.25);
+  }
+}
+#lever-area.pulled #lever-btn{
+  animation:none;
+  transform:scale(0.93);
+  box-shadow:0 0 12px rgba(255,160,40,0.4),0 2px 6px rgba(0,0,0,0.4),inset 0 2px 0 rgba(255,255,255,0.2),inset 0 -2px 0 rgba(0,0,0,0.3);
+}
+/* 标签 */
+#lever-label{
+  margin-top:6px;font-size:10px;color:rgba(255,200,100,0.7);
+  letter-spacing:1.5px;text-align:center;
+  animation:leverLabelPulse 1.8s ease-in-out infinite;
+}
+@keyframes leverLabelPulse{0%,100%{opacity:0.6;}50%{opacity:1;color:rgba(255,220,120,0.95);}}
+
+/* 手指引导已移除，保留 hidden 工具类供 JS 兼容 */
+#finger-guide{display:none;}
+
+/* 机器侧面装饰 */
+#machine-side-left,#machine-side-right{
+  position:absolute;top:80px;width:10px;height:120px;
+  background:linear-gradient(180deg,#2a1060,#180840);
+  border:1.5px solid rgba(160,80,255,0.4);
+  z-index:1;
+}
+#machine-side-left{left:-10px;border-radius:8px 0 0 8px;border-right:none;}
+#machine-side-right{right:-10px;border-radius:0 8px 8px 0;border-left:none;}
+
+/* 机器底座 */
+#machine-base{
+  width:300px;height:24px;
+  background:linear-gradient(180deg,#2a1060,#180840);
+  border-radius:0 0 16px 16px;
+  border:2px solid rgba(160,80,255,0.5);
+  border-top:none;
+  box-shadow:0 8px 24px rgba(0,0,0,0.5);
+  display:flex;align-items:center;justify-content:center;
+  gap:8px;
+}
+.base-light{
+  width:8px;height:8px;border-radius:50%;
+  animation:baseLightBlink 0.8s ease-in-out infinite;
+}
+.base-light:nth-child(1){background:#ff4466;animation-delay:0s;}
+.base-light:nth-child(2){background:#ffaa00;animation-delay:0.2s;}
+.base-light:nth-child(3){background:#44ff88;animation-delay:0.4s;}
+.base-light:nth-child(4){background:#44aaff;animation-delay:0.6s;}
+.base-light:nth-child(5){background:#aa44ff;animation-delay:0.8s;}
+@keyframes baseLightBlink{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.3;transform:scale(0.7);}}
+
+/* ══ 出球动效 ══ */
+#eject-ball{
+  position:absolute;z-index:40;
+  width:60px;height:60px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;
+  opacity:0;pointer-events:none;
+  box-shadow:0 0 30px rgba(255,200,0,0.8),inset 0 -4px 10px rgba(0,0,0,0.3),inset 0 4px 10px rgba(255,255,255,0.25);
+}
+
+/* ══ 光芒爆发 ══ */
+#flash-burst{
+  position:absolute;inset:0;z-index:45;pointer-events:none;
+  border-radius:24px;opacity:0;
+  background:radial-gradient(ellipse at 50% 55%,rgba(255,240,100,0.9) 0%,rgba(255,160,0,0.5) 30%,rgba(255,80,0,0.2) 60%,transparent 80%);
+}
+
+/* ══ 粒子/光束层 ══ */
+#particles{position:absolute;inset:0;pointer-events:none;z-index:26;}
+#beams{position:absolute;inset:0;pointer-events:none;z-index:22;overflow:hidden;}
+.spark{position:absolute;pointer-events:none;animation:sparkFly var(--dur) ease-out forwards;}
+@keyframes sparkFly{
+  0%{transform:translate(0,0) scale(1);opacity:1;}
+  100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0;}
+}
+.beam{
+  position:absolute;width:3px;border-radius:2px;transform-origin:bottom center;
+  opacity:0;animation:beamRise var(--dur) ease-out var(--delay) forwards;
+}
+@keyframes beamRise{0%{opacity:0;height:0;}20%{opacity:1;}100%{opacity:0;height:var(--h);}}
+.shockwave{position:absolute;border-radius:50%;pointer-events:none;animation:shockwaveAnim 0.8s ease-out forwards;}
+@keyframes shockwaveAnim{
+  0%{transform:translate(-50%,-50%) scale(0);opacity:1;}
+  100%{transform:translate(-50%,-50%) scale(5);opacity:0;}
+}
+.confetti{position:absolute;pointer-events:none;animation:confettiFall var(--dur) ease-in forwards;}
+@keyframes confettiFall{
+  0%{transform:translate(0,0) rotate(0deg);opacity:1;}
+  100%{transform:translate(var(--tx),var(--ty)) rotate(var(--rot));opacity:0;}
+}
+
+/* ══ 结算界面 ══ */
+#settle-screen{
+  position:fixed;inset:0;z-index:35;
+  display:flex;flex-direction:column;align-items:center;
+  background:radial-gradient(ellipse 300px 250px at 50% 42%,rgba(100,30,255,0.28) 0%,transparent 70%),
+    linear-gradient(180deg,#0a0420 0%,#04020c 100%);
+  opacity:0;pointer-events:none;
+  transition:opacity 0.6s ease;
+}
+#settle-screen.show{opacity:1;pointer-events:all;}
+
+#settle-title{
+  margin-top:44px;text-align:center;
+  font-size:20px;font-weight:900;letter-spacing:2px;
+  background:linear-gradient(135deg,#fff,#FFE066,#FF9900);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 12px rgba(255,180,0,0.7));
+  opacity:0;transform:translateY(-12px);
+  transition:all 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.2s;
+}
+#settle-screen.show #settle-title{opacity:1;transform:translateY(0);}
+/* 神秘奖励球 */
+#mystery-ball-wrap{
+  margin-top:32px;position:relative;
+  opacity:0;transform:scale(0.5) translateY(20px);
+  transition:all 0.65s cubic-bezier(0.34,1.56,0.64,1) 0.35s;
+}
+#settle-screen.show #mystery-ball-wrap{opacity:1;transform:scale(1) translateY(0);}
+#mystery-ball{
+  width:130px;height:130px;border-radius:50%;
+  /* background 和 box-shadow 完全由 JS 动态注入，CSS 不写死 */
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+  animation:mysteryBallPulse 2s ease-in-out infinite;
+  cursor:pointer;
+}
+@keyframes mysteryBallPulse{
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.06);}
+}
+#mystery-ball::before{
+  content:'';position:absolute;top:12%;left:20%;
+  width:35%;height:25%;border-radius:50%;
+  background:rgba(255,255,255,0.18);
+  filter:blur(4px);
+}
+#mystery-ball::after{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(transparent 0deg,rgba(255,255,255,0.06) 60deg,transparent 120deg);
+  animation:ballRotate 3s linear infinite;
+}
+@keyframes ballRotate{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+#mystery-ball-icon{
+  font-size:42px;position:relative;z-index:1;
+  filter:drop-shadow(0 0 10px rgba(255,200,0,0.5));
+  animation:iconFloat 2.2s ease-in-out infinite;
+}
+@keyframes iconFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}
+/* 球体光环 */
+#mystery-ball-ring{
+  position:absolute;top:50%;left:50%;
+  width:160px;height:160px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.25);
+  transform:translate(-50%,-50%);
+  animation:ringPulse 2s ease-in-out infinite;
+  pointer-events:none;
+}
+#mystery-ball-ring2{
+  position:absolute;top:50%;left:50%;
+  width:190px;height:190px;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.12);
+  transform:translate(-50%,-50%);
+  animation:ringPulse 2s ease-in-out infinite 0.5s;
+  pointer-events:none;
+}
+@keyframes ringPulse{
+  0%,100%{opacity:0.6;transform:translate(-50%,-50%) scale(1);}
+  50%{opacity:1;transform:translate(-50%,-50%) scale(1.06);}
+}
+#mystery-label{
+  margin-top:18px;font-size:14px;font-weight:700;
+  color:rgba(200,160,255,0.9);letter-spacing:1.5px;
+  text-align:center;
+  opacity:0;transition:opacity 0.4s ease 0.7s;
+}
+#settle-screen.show #mystery-label{opacity:1;}
+
+/* 手指引导 */
+#settle-finger{
+  position:absolute;
+  bottom:-38px;left:50%;
+  transform:translateX(-50%);
+  font-size:28px;
+  pointer-events:none;
+  animation:fingerTap 1.1s ease-in-out infinite;
+  filter:drop-shadow(0 0 8px rgba(255,220,100,0.8));
+  opacity:0;transition:opacity 0.4s ease 0.9s;
+}
+#settle-screen.show #settle-finger{opacity:1;}
+@keyframes fingerTap{
+  0%,100%{transform:translateX(-50%) translateY(0);}
+  40%{transform:translateX(-50%) translateY(-10px);}
+  60%{transform:translateX(-50%) translateY(-4px);}
+}
+
+/* ══ 广告跳转界面（全屏覆盖，模拟跳转到广告页） ══ */
+#ad-page{
+  position:fixed;inset:0;z-index:200;
+  background:#fff;
+  display:flex;flex-direction:column;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.3s ease;
+  overflow:hidden;
+}
+#ad-page.show{opacity:1;pointer-events:all;}
+
+/* 广告页顶部状态栏 */
+#ad-page-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px 8px;
+  background:#f5f5f5;
+  border-bottom:1px solid #e0e0e0;
+  flex-shrink:0;
+}
+#ad-page-back{
+  display:flex;align-items:center;gap:6px;
+  font-size:14px;color:#333;font-weight:600;
+  cursor:pointer;padding:4px 8px;
+  border-radius:8px;background:rgba(0,0,0,0.05);
+  border:none;
+}
+#ad-page-back:active{background:rgba(0,0,0,0.12);}
+#ad-page-url{
+  font-size:11px;color:#888;
+  flex:1;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:0 8px;
+}
+#ad-page-timer-wrap{
+  display:flex;align-items:center;gap:4px;
+  background:linear-gradient(135deg,#ff6b35,#ff9500);
+  border-radius:20px;padding:4px 10px;
+  flex-shrink:0;
+}
+#ad-page-timer-label{font-size:10px;color:#fff;opacity:0.85;}
+#ad-page-timer{font-size:13px;font-weight:900;color:#fff;}
+
+/* 广告页内容区 */
+#ad-page-content{
+  flex:1;overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+#ad-page-hero{
+  width:100%;height:200px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  position:relative;overflow:hidden;
+}
+#ad-page-hero-emoji{
+  font-size:80px;
+  filter:drop-shadow(0 8px 24px rgba(0,0,0,0.2));
+  animation:adHeroBounce 2s ease-in-out infinite;
+}
+@keyframes adHeroBounce{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-8px) scale(1.05);}}
+#ad-page-body{
+  padding:16px 18px 24px;
+  flex:1;
+}
+#ad-page-brand{
+  font-size:13px;color:#888;margin-bottom:6px;
+  display:flex;align-items:center;gap:6px;
+}
+#ad-page-brand-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:linear-gradient(135deg,#ff6b35,#ff9500);
+}
+#ad-page-title{
+  font-size:20px;font-weight:800;color:#1a1a1a;
+  line-height:1.4;margin-bottom:12px;
+}
+#ad-page-desc{
+  font-size:14px;color:#555;line-height:1.7;
+  margin-bottom:20px;
+}
+#ad-page-cta{
+  width:100%;padding:16px;
+  background:linear-gradient(135deg,#ff6b35,#ff9500);
+  border:none;border-radius:14px;
+  font-size:16px;font-weight:800;color:#fff;
+  cursor:pointer;letter-spacing:0.5px;
+  box-shadow:0 6px 20px rgba(255,107,53,0.4);
+}
+#ad-page-cta:active{transform:scale(0.98);}
+
+/* 广告页底部进度提示 */
+#ad-page-footer{
+  padding:12px 18px 20px;
+  background:#f9f9f9;
+  border-top:1px solid #eee;
+  flex-shrink:0;
+}
+#ad-page-progress-bar{
+  height:6px;border-radius:3px;
+  background:#e0e0e0;overflow:hidden;
+  margin-bottom:8px;
+}
+#ad-page-progress-fill{
+  height:100%;border-radius:3px;width:0%;
+  background:linear-gradient(90deg,#ff6b35,#ff9500);
+  transition:width 0.3s linear;
+}
+#ad-page-progress-text{
+  font-size:11px;color:#999;text-align:center;
+}
+#ad-page-reward-hint{
+  font-size:12px;color:#ff6b35;font-weight:700;
+  text-align:center;margin-top:4px;
+  opacity:0;transition:opacity 0.4s ease;
+}
+#ad-page-reward-hint.show{opacity:1;}
+
+/* 旧的 ad-overlay 保留但隐藏（不再使用） */
+#ad-overlay{ display:none; }
+
+/* ══ 奖励展示界面 ══ */
+#reward-screen{
+  position:fixed;inset:0;z-index:55;
+  display:flex;flex-direction:column;align-items:center;
+  background:radial-gradient(ellipse 320px 260px at 50% 42%,rgba(255,160,0,0.22) 0%,transparent 70%),
+    linear-gradient(180deg,#100800 0%,#04020c 100%);
+  opacity:0;pointer-events:none;
+  transition:opacity 0.5s ease;
+}
+#reward-screen.show{opacity:1;pointer-events:all;}
+
+#reward-title{
+  margin-top:28px;font-size:18px;font-weight:900;letter-spacing:2px;
+  background:linear-gradient(135deg,#fff,#FFE066,#FF9900);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 14px rgba(255,180,0,0.8));
+  opacity:0;transform:translateY(-12px);
+  transition:all 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.1s;
+}
+#reward-screen.show #reward-title{opacity:1;transform:translateY(0);}
+
+/* 奖励球（破碎后展示） */
+#reward-icon-big{
+  margin-top:14px;
+  font-size:80px;line-height:1;
+  opacity:0;transform:scale(0.5) translateY(10px);
+  transition:all 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.25s;
+  filter:drop-shadow(0 0 18px rgba(255,200,0,0.7)) drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+  animation:rewardIconFloat 2s ease-in-out infinite 0.8s;
+}
+#reward-screen.show #reward-icon-big{opacity:1;transform:scale(1) translateY(0);}
+@keyframes rewardIconFloat{
+  0%,100%{transform:scale(1) translateY(0);}
+  50%{transform:scale(1) translateY(-8px);}
+}
+#reward-amount-big{
+  margin-top:8px;
+  font-size:40px;font-weight:900;line-height:1;
+  background:linear-gradient(135deg,#FFE066,#FF9900);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 12px rgba(255,180,0,0.8));
+  opacity:0;transform:scale(0.7);
+  transition:all 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.4s;
+}
+#reward-screen.show #reward-amount-big{opacity:1;transform:scale(1);}
+#reward-unit-big{
+  font-size:14px;font-weight:700;color:rgba(255,200,100,0.8);
+  margin-top:2px;letter-spacing:1px;
+  opacity:0;transition:opacity 0.4s ease 0.55s;
+}
+#reward-screen.show #reward-unit-big{opacity:1;}
+/* 道具说明卡片 */
+#reward-item-card{
+  margin:10px 20px 0;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:14px;padding:10px 14px;
+  opacity:0;transform:translateY(8px);
+  transition:all 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.5s;
+  width:calc(100% - 40px);
+}
+#reward-screen.show #reward-item-card{opacity:1;transform:translateY(0);}
+.item-explain-row{
+  display:flex;align-items:center;gap:10px;
+  padding:5px 0;
+}
+.item-explain-row+.item-explain-row{
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.item-explain-icon{font-size:20px;flex-shrink:0;}
+.item-explain-text{display:flex;flex-direction:column;gap:1px;}
+.item-explain-name{
+  font-size:12px;font-weight:700;color:rgba(255,255,255,0.9);
+}
+.item-explain-desc{
+  font-size:10px;color:rgba(200,200,200,0.5);
+}
+
+/* 本次/累计获得卡片 */
+#reward-total-card{
+  margin:8px 20px 0;
+  background:linear-gradient(135deg,rgba(0,180,255,0.08),rgba(0,100,200,0.05));
+  border:1px solid rgba(0,180,255,0.2);
+  border-radius:14px;padding:10px 16px;
+  opacity:0;transform:translateY(8px);
+  transition:all 0.45s cubic-bezier(0.34,1.56,0.64,1) 0.65s;
+  width:calc(100% - 40px);
+}
+#reward-screen.show #reward-total-card{opacity:1;transform:translateY(0);}
+#reward-total-title{
+  font-size:11px;font-weight:700;color:rgba(100,200,255,0.8);
+  margin-bottom:8px;letter-spacing:0.5px;
+}
+#reward-total-items{
+  display:flex;flex-direction:column;gap:6px;
+}
+.reward-total-item{
+  display:flex;align-items:center;justify-content:space-between;
+}
+.reward-total-item-left{
+  display:flex;align-items:center;gap:6px;
+  font-size:13px;color:rgba(255,255,255,0.75);
+}
+.reward-total-item-left span:first-child{font-size:16px;}
+.reward-total-item-val{
+  font-size:18px;font-weight:900;
+  background:linear-gradient(135deg,#00e5ff,#0088ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.reward-total-item-val.card-val{
+  background:linear-gradient(135deg,#FFD700,#FF9900);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+
+/* 领取按钮区 */
+#reward-actions{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:0 18px 20px;
+  background:linear-gradient(0deg,rgba(4,2,12,0.98) 60%,transparent 100%);
+  opacity:0;transform:translateY(16px);
+  transition:all 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.9s;
+}
+#reward-screen.show #reward-actions{opacity:1;transform:translateY(0);}
+#btn-continue{
+  width:100%;padding:14px;
+  background:linear-gradient(135deg,#7722cc,#aa44ff,#cc88ff,#aa44ff,#7722cc);
+  background-size:300% 100%;
+  border:none;border-radius:50px;
+  font-size:15px;font-weight:900;color:#fff;
+  cursor:pointer;letter-spacing:1px;
+  box-shadow:0 4px 24px rgba(120,40,220,0.6),inset 0 2px 0 rgba(255,255,255,0.18);
+  animation:btnShine 3s linear infinite;
+  margin-bottom:10px;
+}
+#btn-continue:active{transform:scale(0.97);}
+#btn-collect{
+  width:100%;padding:18px;
+  background:linear-gradient(135deg,#22aa44,#44dd66,#88ffaa,#44dd66,#22aa44);
+  background-size:300% 100%;
+  border:none;border-radius:50px;
+  font-size:17px;font-weight:900;color:#fff;
+  cursor:pointer;letter-spacing:1px;
+  box-shadow:0 6px 32px rgba(34,170,68,0.65),inset 0 2px 0 rgba(255,255,255,0.18);
+  animation:btnShine 3s linear infinite,btnCollectPulse 1.5s ease-in-out infinite;
+  position:relative;overflow:hidden;
+}
+@keyframes btnCollectPulse{
+  0%,100%{box-shadow:0 6px 32px rgba(34,170,68,0.65),inset 0 2px 0 rgba(255,255,255,0.18);}
+  50%{box-shadow:0 8px 50px rgba(100,255,150,0.8),0 0 30px rgba(34,200,80,0.5),inset 0 2px 0 rgba(255,255,255,0.18);}
+}
+#btn-collect::after{
+  content:'';position:absolute;top:-50%;left:-60%;
+  width:32%;height:200%;
+  background:rgba(255,255,255,0.22);transform:skewX(-20deg);
+  animation:btnGlare 1.8s ease-in-out infinite;
+}
+#urgency-tag{
+  text-align:center;margin-top:10px;
+  font-size:12px;color:rgba(255,160,80,0.9);
+  letter-spacing:0.5px;
+}
+#urgency-countdown{font-weight:900;color:#FF6622;animation:urgencyBlink 1s ease-in-out infinite;}
+@keyframes urgencyBlink{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+/* ══ 全屏开奖特效层 ══ */
+#burst-overlay{
+  position:fixed;inset:0;z-index:150;
+  pointer-events:none;
+  display:none;
+}
+#burst-overlay.active{ display:block; }
+#burst-flash{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 50%,#fff 0%,rgba(255,255,255,0.85) 15%,rgba(255,255,255,0) 70%);
+  opacity:0;
+  transition:opacity 0.06s ease-out;
+}
+#burst-canvas{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+}
+#burst-text{
+  position:absolute;top:62%;left:50%;
+  transform:translate(-50%,-50%) scale(0.4);
+  font-size:52px;font-weight:900;letter-spacing:2px;
+  color:#fff;text-align:center;white-space:nowrap;
+  text-shadow:0 0 30px currentColor, 0 0 60px currentColor, 0 4px 16px rgba(0,0,0,0.6);
+  opacity:0;
+  transition:opacity 0.18s ease-out, transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+}
+#burst-text.pop{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+}
+
+/* ══ 奖励汇总弹窗 ══ */
+#summary-overlay{
+  position:fixed;inset:0;z-index:70;
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.35s ease;
+}
+#summary-overlay.show{opacity:1;pointer-events:all;}
+#summary-modal{
+  width:300px;max-width:90%;
+  background:linear-gradient(160deg,#1a0a2e,#0d1a2e);
+  border:1px solid rgba(180,120,255,0.3);
+  border-radius:20px;
+  padding:24px 20px 20px;
+  box-shadow:0 0 60px rgba(120,60,220,0.5);
+  transform:scale(0.85);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+#summary-overlay.show #summary-modal{transform:scale(1);}
+#summary-title{
+  text-align:center;font-size:18px;font-weight:900;
+  color:#fff;letter-spacing:1px;margin-bottom:16px;
+}
+#summary-totals{
+  display:flex;flex-direction:column;gap:10px;margin-bottom:16px;
+}
+.summary-total-row{
+  display:flex;align-items:center;gap:10px;
+  background:rgba(255,255,255,0.06);border-radius:12px;
+  padding:12px 16px;
+}
+.summary-total-icon{font-size:24px;}
+.summary-total-label{
+  font-size:13px;color:rgba(255,255,255,0.7);flex:1;
+}
+.summary-total-val{
+  font-size:28px;font-weight:900;
+  background:linear-gradient(135deg,#00e5ff,#0088ff);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+#summary-card-row .summary-total-val{
+  background:linear-gradient(135deg,#FFD700,#FF9900);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.summary-total-unit{
+  font-size:12px;color:rgba(255,255,255,0.4);
+}
+#summary-hint{
+  text-align:center;font-size:11px;
+  color:rgba(180,220,180,0.7);margin-bottom:14px;
+}
+#summary-confirm{
+  width:100%;padding:16px;
+  background:linear-gradient(135deg,#22aa44,#44dd66,#88ffaa,#44dd66,#22aa44);
+  background-size:300% 100%;
+  border:none;border-radius:50px;
+  font-size:16px;font-weight:900;color:#fff;
+  cursor:pointer;letter-spacing:1px;
+  box-shadow:0 6px 28px rgba(34,170,68,0.6);
+  animation:btnShine 3s linear infinite;
+}
+#summary-confirm:active{transform:scale(0.97);}
+
+/* ══ 进入果园 ══ */
+#enter-overlay{
+  position:fixed;inset:0;z-index:60;
+  background:radial-gradient(ellipse at center,#0a2010 0%,#04020c 100%);
+  opacity:0;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:14px;border-radius:24px;
+  padding:0 28px;
+}
+.enter-icon{font-size:72px;animation:enterBounce 0.65s cubic-bezier(0.34,1.56,0.64,1) 0.3s both;}
+@keyframes enterBounce{from{transform:scale(0) rotate(-25deg)}to{transform:scale(1) rotate(0deg)}}
+.enter-text{
+  font-size:22px;font-weight:800;
+  background:linear-gradient(135deg,#fff,#88ffaa,#22dd66);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 16px rgba(34,200,80,0.75));
+  animation:enterTextFade 0.5s ease 0.55s both;
+  text-align:center;
+}
+@keyframes enterTextFade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.enter-sub{
+  font-size:13px;color:rgba(150,255,180,0.65);
+  text-align:center;line-height:1.5;
+  animation:enterTextFade 0.5s ease 0.7s both;
+}
+.enter-game-btn{
+  margin-top:8px;
+  padding:16px 40px;
+  background:linear-gradient(135deg,#22aa44,#44dd66);
+  border:none;border-radius:50px;
+  font-size:16px;font-weight:800;color:#fff;
+  cursor:pointer;letter-spacing:1px;
+  box-shadow:0 6px 28px rgba(34,170,68,0.6),inset 0 2px 0 rgba(255,255,255,0.2);
+  animation:enterTextFade 0.5s ease 0.85s both, enterBtnPulse 1.5s ease-in-out 1.4s infinite;
+}
+@keyframes enterBtnPulse{
+  0%,100%{box-shadow:0 6px 28px rgba(34,170,68,0.6),inset 0 2px 0 rgba(255,255,255,0.2);}
+  50%{box-shadow:0 8px 40px rgba(100,255,150,0.8),inset 0 2px 0 rgba(255,255,255,0.2);}
+}
+
+/* ══ 重播 ══ */
+#replay-btn{
+  position:absolute;top:14px;right:14px;z-index:70;
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);
+  border-radius:20px;padding:6px 14px;
+  font-size:12px;color:rgba(255,255,255,0.45);
+  cursor:pointer;display:none;
+}
+
+/* ══ 拉杆提示文本 ══ */
+#pull-hint{
+  position:relative;z-index:5;
+  margin-top:0;
+  text-align:center;
+  opacity:0;
+  transition:opacity 0.5s ease 0.4s;
+}
+#pull-hint.show{opacity:1;}
+#pull-hint-text{
+  font-size:13px;font-weight:700;letter-spacing:1.5px;
+  color:#FFD700;
+  filter:drop-shadow(0 0 8px rgba(255,160,0,0.6));
+  animation:hintPulse 2s ease-in-out infinite;
+}
+#pull-hint-text .hint-text{
+  background:linear-gradient(90deg,#FFD700,#FF9900,#FFD700);
+  background-size:200% 100%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:hintShimmer 2s linear infinite;
+}
+@keyframes hintShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes hintPulse{0%,100%{filter:drop-shadow(0 0 6px rgba(255,160,0,0.5));}50%{filter:drop-shadow(0 0 14px rgba(255,200,0,0.9));}}
+#pull-hint-arrow{
+  font-size:16px;
+  display:block;
+  margin-top:2px;
+  animation:arrowBounce 1s ease-in-out infinite;
+}
+@keyframes arrowBounce{0%,100%{transform:translateY(0);}50%{transform:translateY(4px);}}
+
+/* ══ 底部 feed 广告区 ══ */
+#feed-area{
+  position:relative;z-index:5;
+  width:100%;
+  display:flex;flex-direction:column;
+  margin-top:6px;
+  opacity:0;
+  transition:opacity 0.5s ease 0.6s;
+}
+#feed-area.show{opacity:1;}
+
+/* feed 顶部栏 */
+#feed-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px 6px;
+  flex-shrink:0;
+}
+#feed-header-left{
+  font-size:11px;color:rgba(200,160,255,0.7);letter-spacing:0.5px;
+}
+#feed-chances{
+  display:flex;align-items:center;gap:5px;
+  background:rgba(255,200,0,0.12);
+  border:1px solid rgba(255,200,0,0.3);
+  border-radius:20px;padding:3px 10px;
+}
+#feed-chances-icon{font-size:13px;}
+#feed-chances-text{
+  font-size:11px;font-weight:700;color:#FFD700;
+  letter-spacing:0.5px;
+}
+
+/* feed 滚动容器 */
+#feed-scroll{
+  overflow-y:visible;overflow-x:hidden;
+  padding:0 10px 10px;
+}
+
+/* 瀑布流双列 */
+#feed-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+/* 广告卡片 */
+.feed-card{
+  border-radius:12px;
+  overflow:hidden;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  cursor:pointer;
+  position:relative;
+  transition:transform 0.15s ease, box-shadow 0.15s ease;
+}
+.feed-card:active{transform:scale(0.97);}
+.feed-card.watched{
+  border-color:rgba(255,200,0,0.4);
+  box-shadow:0 0 10px rgba(255,180,0,0.2);
+}
+
+/* 卡片封面图（用渐变色模拟） */
+.feed-card-cover{
+  width:100%;
+  aspect-ratio:1/1;
+  position:relative;
+  overflow:hidden;
+}
+.feed-card-cover-inner{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:4px;
+}
+.feed-card-emoji{font-size:32px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.4));}
+.feed-card-brand{
+  font-size:10px;font-weight:700;color:rgba(255,255,255,0.9);
+  letter-spacing:0.5px;text-shadow:0 1px 4px rgba(0,0,0,0.6);
+}
+
+/* 卡片底部信息 */
+.feed-card-body{
+  padding:6px 8px 8px;
+}
+.feed-card-title{
+  font-size:11px;color:rgba(255,255,255,0.85);
+  line-height:1.4;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.feed-card-meta{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:5px;
+}
+.feed-card-tag{
+  font-size:9px;color:rgba(200,160,255,0.6);
+  background:rgba(160,80,255,0.12);
+  border-radius:4px;padding:1px 5px;
+}
+
+/* 浏览进度条（卡片底部） */
+.feed-card-progress{
+  position:absolute;bottom:0;left:0;right:0;
+  height:3px;
+  background:rgba(255,255,255,0.08);
+}
+.feed-card-progress-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#aa44ff,#FFD700);
+  transition:width 0.2s linear;
+  border-radius:0 2px 2px 0;
+}
+
+/* 已解锁徽章 */
+.feed-card-badge{
+  position:absolute;top:6px;right:6px;
+  background:linear-gradient(135deg,#FFD700,#FF9900);
+  border-radius:10px;padding:2px 7px;
+  font-size:9px;font-weight:900;color:#1a0800;
+  opacity:0;transform:scale(0.5);
+  transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+}
+.feed-card.watched .feed-card-badge{opacity:1;transform:scale(1);}
+
+/* 点击浏览提示文字 */
+.feed-card-view-tip{
+  font-size:9px;color:rgba(255,160,60,0.85);
+  font-weight:700;letter-spacing:0.3px;
+  background:rgba(255,120,0,0.12);
+  border-radius:4px;padding:1px 5px;
+}
+.feed-card.watched .feed-card-view-tip{
+  color:rgba(100,200,100,0.7);
+  background:rgba(50,180,50,0.1);
+}
+.feed-card.watched .feed-card-view-tip::before{content:'✓ ';}
+
+/* 浏览中遮罩提示（保留兼容） */
+.feed-card-viewing{
+  position:absolute;inset:0;
+  background:rgba(0,0,0,0.0);
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:8px;
+  pointer-events:none;
+  opacity:0;transition:opacity 0.2s;
+}
+.feed-card.viewing .feed-card-viewing{opacity:1;}
+.feed-card-viewing-text{
+  font-size:9px;color:rgba(255,220,100,0.9);
+  background:rgba(0,0,0,0.5);
+  border-radius:6px;padding:2px 7px;
+  letter-spacing:0.3px;
+}
+
+/* 舞台震动 */
+@keyframes stageShake{
+  0%,100%{transform:translate(0,0);}
+  10%{transform:translate(-10px,-4px);}
+  20%{transform:translate(10px,4px);}
+  30%{transform:translate(-8px,3px);}
+  40%{transform:translate(8px,-3px);}
+  55%{transform:translate(-4px,2px);}
+  70%{transform:translate(4px,-2px);}
+  85%{transform:translate(-2px,1px);}
+}
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div id="stage">
+  <div id="flash-burst"></div>
+  <div id="particles"></div>
+  <div id="beams"></div>
+
+  <!-- 主界面：抽奖机 -->
+  <div id="title-area">
+    <div id="title-main">🎰 <span class="title-text">幸运抽奖机</span></div>
+    <div id="title-sub">点击抽奖，开启你的专属奖励</div>
+  </div>
+
+  <div id="machine-wrap">
+    <div id="machine-inner-wrap" style="position:relative;display:flex;flex-direction:column;align-items:center;width:100%;overflow:visible;">
+      <!-- 抽奖按钮：machine-inner-wrap 子级，绝对定位居中在机器底部 -->
+      <div id="lever-area" onclick="onLeverClick()">
+        <div id="lever-rod-wrap"><div id="lever-rod"></div><div id="lever-ball"></div></div>
+        <div id="lever-base"></div>
+        <div id="lever-btn">🎉 立即抽奖</div>
+        <div id="lever-label">点击抽奖</div>
+        <div id="finger-guide"></div>
+      </div>
+      <div id="machine-body">
+        <div id="machine-top-lights">
+          <div class="top-light"></div><div class="top-light"></div>
+          <div class="top-light"></div><div class="top-light"></div>
+          <div class="top-light"></div><div class="top-light"></div>
+          <div class="top-light"></div><div class="top-light"></div>
+        </div>
+        <div id="machine-sign">✨ LUCKY BALL ✨</div>
+        <div id="ball-chamber">
+          <!-- 漂浮球体由JS生成 -->
+          <div id="spin-track">
+            <div id="spin-items"><!-- 滚动球由JS生成 --></div>
+          </div>
+          <div id="spin-selector"></div>
+        </div>
+        <div id="machine-tube"></div>
+        <div id="machine-side-left"></div>
+        <div id="machine-side-right"></div>
+      </div>
+      <div id="machine-base">
+        <div class="base-light"></div><div class="base-light"></div>
+        <div class="base-light"></div><div class="base-light"></div>
+        <div class="base-light"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抽奖提示文本（内容已移除，保留节点供 JS 控制） -->
+  <div id="pull-hint"></div>
+
+  <!-- 底部 feed 瀑布流广告区 -->
+  <div id="feed-area">
+    <div id="feed-header">
+      <div id="feed-header-left">📺 点击广告浏览解锁抽奖次数</div>
+      <div id="feed-chances">
+        <span id="feed-chances-icon">🎰</span>
+        <span id="feed-chances-text">剩余 <span id="chances-count">0</span> 次</span>
+      </div>
+    </div>
+    <div id="feed-scroll">
+      <div id="feed-grid"><!-- 广告卡片由 JS 生成 --></div>
+    </div>
+  </div>
+
+
+  <!-- 出球动效球 -->
+  <div id="eject-ball"></div>
+
+  <!-- 结算界面 -->
+  <div id="settle-screen">
+    <div id="settle-title">🎊 奖励球已弹出！</div>
+    <div id="mystery-ball-wrap">
+      <div id="mystery-ball-ring2"></div>
+      <div id="mystery-ball-ring"></div>
+      <div id="mystery-ball">
+        <div id="mystery-ball-icon">🎁</div>
+      </div>
+      <!-- 手指引导 -->
+      <div id="settle-finger">👆</div>
+    </div>
+    <div id="mystery-label">点击球开启奖励</div>
+  </div>
+
+  <!-- 广告跳转界面（全屏，模拟跳转到广告落地页） -->
+  <div id="ad-page">
+    <!-- 顶部导航栏 -->
+    <div id="ad-page-bar">
+      <button id="ad-page-back" onclick="onAdPageBack()">‹ 返回</button>
+      <div id="ad-page-url">ad.meituan.com</div>
+      <div id="ad-page-timer-wrap">
+        <span id="ad-page-timer-label">还需浏览</span>
+        <span id="ad-page-timer">5s</span>
+      </div>
+    </div>
+    <!-- 广告内容 -->
+    <div id="ad-page-content">
+      <div id="ad-page-hero">
+        <div id="ad-page-hero-emoji">🍔</div>
+      </div>
+      <div id="ad-page-body">
+        <div id="ad-page-brand">
+          <div id="ad-page-brand-dot"></div>
+          <span id="ad-page-brand-name">美团外卖</span>
+          <span style="margin-left:auto;font-size:10px;background:#ff6b35;color:#fff;padding:2px 6px;border-radius:4px;">广告</span>
+        </div>
+        <div id="ad-page-title">限时特惠！满30减15，今晚吃什么就选它</div>
+        <div id="ad-page-desc">美团外卖为您精选周边优质餐厅，新用户专享超值优惠券，30分钟极速送达，让美食触手可及。</div>
+        <button id="ad-page-cta">立即领取优惠券 →</button>
+      </div>
+    </div>
+    <!-- 底部进度 -->
+    <div id="ad-page-footer">
+      <div id="ad-page-progress-bar">
+        <div id="ad-page-progress-fill"></div>
+      </div>
+      <div id="ad-page-progress-text">浏览广告中，请稍候…</div>
+      <div id="ad-page-reward-hint">🎰 浏览完成！点击「返回」领取抽奖次数</div>
+    </div>
+  </div>
+
+  <!-- 旧广告遮罩（保留 DOM，JS 不再使用） -->
+  <div id="ad-overlay"></div>
+
+  <!-- 奖励展示 -->
+  <div id="reward-screen">
+    <div id="reward-title">🎉 恭喜获得！</div>
+    <div id="reward-icon-big">💧</div>
+    <div id="reward-amount-big">100</div>
+    <div id="reward-unit-big">水滴</div>
+
+    <!-- 道具说明卡片 -->
+    <div id="reward-item-card">
+      <div id="reward-item-card-inner">
+        <div class="item-explain-row">
+          <span class="item-explain-icon">💧</span>
+          <div class="item-explain-text">
+            <span class="item-explain-name">水滴</span>
+            <span class="item-explain-desc">在果园中兑换水果的道具</span>
+          </div>
+        </div>
+        <div class="item-explain-row">
+          <span class="item-explain-icon">🎁</span>
+          <div class="item-explain-text">
+            <span class="item-explain-name">水果卡（一箱水果）</span>
+            <span class="item-explain-desc">在果园中直接兑换一箱水果</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 本次/累计获得 -->
+    <div id="reward-total-card">
+      <div id="reward-total-title">本次获得</div>
+      <div id="reward-total-items"></div>
+    </div>
+
+    <div id="reward-actions">
+      <button id="btn-continue" onclick="continueDrawing()" style="display:none">🎰 继续抽奖 <span id="btn-continue-count"></span></button>
+      <button id="btn-collect" onclick="enterOrchard()">🌳 去果园兑换</button>
+      <div id="urgency-tag">⏰ 奖励将在 <span id="urgency-countdown">29:58</span> 后过期</div>
+    </div>
+  </div>
+
+  <!-- 奖励汇总弹窗 -->
+  <div id="summary-overlay">
+    <div id="summary-modal">
+      <div id="summary-title">🎉 全部奖励汇总</div>
+      <div id="summary-totals">
+        <div class="summary-total-row" id="summary-drop-row">
+          <span class="summary-total-icon">💧</span>
+          <span class="summary-total-label">水滴</span>
+          <span class="summary-total-val" id="summary-drop-val">0</span>
+          <span class="summary-total-unit">滴</span>
+        </div>
+        <div class="summary-total-row" id="summary-card-row" style="display:none">
+          <span class="summary-total-icon">🎁</span>
+          <span class="summary-total-label">水果卡</span>
+          <span class="summary-total-val" id="summary-card-val">0</span>
+          <span class="summary-total-unit">张</span>
+        </div>
+      </div>
+      <div id="summary-hint">前往果园即可兑换水果</div>
+      <button id="summary-confirm" onclick="confirmSummary()">🌳 去果园兑换</button>
+    </div>
+  </div>
+
+  <!-- 进入果园 -->
+  <div id="enter-overlay">
+    <div class="enter-icon">🌳</div>
+    <div class="enter-text">正在跳转果园游戏</div>
+    <div class="enter-sub">水滴已存入，快去签到领奖吧！</div>
+    <button class="enter-game-btn" onclick="void 0">🎮 点击进入游戏</button>
+  </div>
+
+  <button id="replay-btn" onclick="location.reload()">↺ 重新演示</button>
+</div>
+<!-- 全屏开奖特效层（fixed，独立于 stage 坐标系） -->
+<div id="burst-overlay">
+  <div id="burst-flash"></div>
+  <canvas id="burst-canvas"></canvas>
+  <div id="burst-text"></div>
+</div>
+<script>
+/* ══════════════════════════════════════════
+   幸运抽奖机 · 状态机
+   IDLE → SPIN → FLASH → SETTLE → OPEN → REWARD → ORCHARD
+══════════════════════════════════════════ */
+
+// 奖励球池（icon + 数量 + 颜色，玩家在球仓里能看到）
+// type: 'drop'=水滴  'card'=水果卡（一箱水果）
+const BALL_POOL = [
+  { type:'drop', icon:'💧', label:'50水滴',   amount:50,  bg:'radial-gradient(circle at 32% 28%,#88ddff,#0099cc 55%,#005588)', shadow:'#00aadd' },
+  { type:'drop', icon:'💧', label:'100水滴',  amount:100, bg:'radial-gradient(circle at 32% 28%,#55ccff,#0077bb 55%,#003366)', shadow:'#0088cc' },
+  { type:'drop', icon:'💧', label:'200水滴',  amount:200, bg:'radial-gradient(circle at 32% 28%,#33bbff,#0055aa 55%,#002255)', shadow:'#0066bb' },
+  { type:'drop', icon:'💧', label:'500水滴',  amount:500, bg:'radial-gradient(circle at 32% 28%,#00aaff,#0033aa 55%,#001144)', shadow:'#0044cc' },
+  { type:'drop', icon:'💧', label:'50水滴',   amount:50,  bg:'radial-gradient(circle at 32% 28%,#88ddff,#0099cc 55%,#005588)', shadow:'#00aadd' },
+  { type:'drop', icon:'💧', label:'100水滴',  amount:100, bg:'radial-gradient(circle at 32% 28%,#55ccff,#0077bb 55%,#003366)', shadow:'#0088cc' },
+  { type:'drop', icon:'💧', label:'200水滴',  amount:200, bg:'radial-gradient(circle at 32% 28%,#33bbff,#0055aa 55%,#002255)', shadow:'#0066bb' },
+  { type:'card', icon:'🎁', label:'一箱水果', amount:1,   bg:'radial-gradient(circle at 32% 28%,#ffdd88,#ee8800 55%,#884400)', shadow:'#ff9900' },
+  { type:'card', icon:'🎁', label:'一箱水果', amount:1,   bg:'radial-gradient(circle at 32% 28%,#ffdd88,#ee8800 55%,#884400)', shadow:'#ff9900' },
+  { type:'card', icon:'🎁', label:'一箱水果', amount:1,   bg:'radial-gradient(circle at 32% 28%,#ffdd88,#ee8800 55%,#884400)', shadow:'#ff9900' },
+];
+
+// 兼容旧引用（粒子系统用到 shadow）
+const BALL_COLORS = BALL_POOL;
+
+// 奖励池：与 BALL_POOL 一一对应
+const REWARD_POOL = BALL_POOL.map(b => ({
+  type:       b.type,
+  icon:       b.icon,
+  label:      b.label,
+  amount:     b.amount,
+  ballBg:     b.bg.replace('32% 28%', '35% 30%'),
+  ballShadow: b.shadow,
+}));
+
+// feed 广告数据
+const FEED_ADS = [
+  { emoji:'🍔', brand:'美团外卖', title:'限时特惠！满30减15，今晚吃什么就选它', tag:'外卖', bg:'linear-gradient(160deg,#ff6b35,#c0392b)', viewSec:3 },
+  { emoji:'🛵', brand:'美团跑腿', title:'急速配送，30分钟送达，帮你跑腿买任何东西', tag:'配送', bg:'linear-gradient(160deg,#f7971e,#ffd200)', viewSec:3 },
+  { emoji:'🎬', brand:'猫眼电影', title:'周末大片来袭！提前购票享9折优惠', tag:'娱乐', bg:'linear-gradient(160deg,#1a1a2e,#16213e)', viewSec:3 },
+  { emoji:'🏨', brand:'美团酒店', title:'五星酒店特惠，今晚入住立减200元', tag:'住宿', bg:'linear-gradient(160deg,#0f3460,#533483)', viewSec:3 },
+  { emoji:'💄', brand:'美团美业', title:'美甲美睫套餐，到店享8折，名额有限', tag:'美业', bg:'linear-gradient(160deg,#e91e8c,#9b27af)', viewSec:3 },
+  { emoji:'🌿', brand:'美团买菜', title:'新鲜蔬果直达，今日特价白菜0.99元/斤', tag:'买菜', bg:'linear-gradient(160deg,#11998e,#38ef7d)', viewSec:3 },
+  { emoji:'🎮', brand:'美团游戏', title:'热门手游礼包免费领，限时活动不要错过', tag:'游戏', bg:'linear-gradient(160deg,#4776e6,#8e54e9)', viewSec:3 },
+  { emoji:'🦷', brand:'美团医疗', title:'口腔检查免费，洗牙仅需99元，预约从速', tag:'医疗', bg:'linear-gradient(160deg,#00b4db,#0083b0)', viewSec:3 },
+];
+
+// ── 状态 ──────────────────────────────────
+let gameState = 'IDLE';
+let countdownTimer = null;
+let countdownSec = 29 * 60 + 58;
+let spinRaf = null;
+let spinSpeed = 0;
+let spinOffset = 0;
+let spinItemHeight = 60; // px per item (52px ball + 8px gap)
+let spinItemCount = 0;
+
+// 碰撞球体状态
+let chaosBalls = [];
+let chaosRaf = null;
+
+// 多次抽奖累积奖励
+let totalRewards = [];     // 每次抽奖的奖励记录 {type, icon, label, amount}
+let totalDrops  = 0;       // 累计水滴总数
+let totalCards  = 0;       // 累计水果卡总数
+let pendingReward = null;  // 本次已确定的奖励，onSpinStop 时赋值
+
+// 演示顺序控制：第1次=水滴，第2次=水果，后续随机（水果低概率）
+let spinCount = 0;         // 已完成的抽奖次数
+
+// 演示用奖励选取：按顺序固定前两次，后续随机
+function pickDemoReward() {
+  spinCount++;
+  if (spinCount === 1) {
+    // 第1次：随机一个水滴奖励
+    const drops = REWARD_POOL.filter(r => r.type === 'drop');
+    return drops[Math.floor(Math.random() * drops.length)];
+  }
+  if (spinCount === 2) {
+    // 第2次：水果卡
+    return REWARD_POOL.find(r => r.type === 'card');
+  }
+  // 后续：水果概率约10%，水滴90%
+  if (Math.random() < 0.1) {
+    return REWARD_POOL.find(r => r.type === 'card');
+  }
+  const drops = REWARD_POOL.filter(r => r.type === 'drop');
+  return drops[Math.floor(Math.random() * drops.length)];
+}
+
+// feed 广告状态
+let freeChances = 0;       // 剩余抽奖次数
+let viewingCard = null;    // 当前正在计时的卡片 index
+let viewTimers = {};       // 各卡片计时器
+let cardProgress = {};     // 各卡片已浏览进度 0~1
+
+// ── DOM ───────────────────────────────────
+const stage         = document.getElementById('stage');
+const titleArea     = document.getElementById('title-area');
+const titleSub      = document.getElementById('title-sub');
+const machineWrap   = document.getElementById('machine-wrap');
+const ballChamber   = document.getElementById('ball-chamber');
+const spinTrack     = document.getElementById('spin-track');
+const spinItems     = document.getElementById('spin-items');
+const spinSelector  = document.getElementById('spin-selector');
+const leverArea     = document.getElementById('lever-area');
+const leverLabel    = document.getElementById('lever-label');
+const fingerGuide   = document.getElementById('finger-guide');
+const flashBurst    = document.getElementById('flash-burst');
+const ejectBall     = document.getElementById('eject-ball');
+const settleScreen  = document.getElementById('settle-screen');
+// adOverlay / adProgressFill / adCountdown 已废弃，不再引用
+const rewardScreen  = document.getElementById('reward-screen');
+const rewardIconBig = document.getElementById('reward-icon-big');
+const rewardAmountBig=document.getElementById('reward-amount-big');
+const rewardUnitBig = document.getElementById('reward-unit-big');
+const enterOverlay  = document.getElementById('enter-overlay');
+const replayBtn       = document.getElementById('replay-btn');
+const urgencyCountdown= document.getElementById('urgency-countdown');
+const particlesEl   = document.getElementById('particles');
+const beamsEl       = document.getElementById('beams');
+const pullHint      = document.getElementById('pull-hint');
+const feedArea      = document.getElementById('feed-area');
+const feedGrid      = document.getElementById('feed-grid');
+const chancesCount  = document.getElementById('chances-count');
+
+// ── 入场 ──────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  startBgCanvas();
+  setTimeout(() => {
+    titleArea.classList.add('show');
+    machineWrap.classList.add('show');
+    pullHint.classList.add('show');
+    feedArea.classList.add('show');
+  }, 300);
+  setTimeout(() => {
+    buildIdleBalls();
+    alignLever();
+    buildFeed();
+    // 开局免费赠送 1 次抽奖机会
+    grantFreeChance();
+  }, 800);
+});
+
+// 赠送免费次数并显示提示
+function grantFreeChance() {
+  freeChances = 1;
+  updateChancesUI();
+  // 在 pull-hint 下方短暂显示赠送提示
+  const hint = document.createElement('div');
+  hint.id = 'free-chance-hint';
+  hint.style.cssText = `
+    text-align:center;font-size:11px;font-weight:700;
+    color:rgba(100,255,150,0.9);letter-spacing:0.5px;
+    margin-top:4px;
+    opacity:0;transition:opacity 0.4s ease;
+  `;
+  hint.textContent = '🎁 新用户专享：已赠送 1 次免费抽奖！';
+  const pullHintEl = document.getElementById('pull-hint');
+  if (pullHintEl && pullHintEl.parentNode) {
+    pullHintEl.parentNode.insertBefore(hint, pullHintEl.nextSibling);
+    setTimeout(() => { hint.style.opacity = '1'; }, 100);
+    setTimeout(() => { hint.style.opacity = '0'; }, 4000);
+    setTimeout(() => { hint.remove(); }, 4500);
+  }
+}
+
+// ── 摇杆对齐 ──────────────────────────────
+// 抽奖按钮已由 CSS 定位（bottom:-62px，left:50%），此函数保留为空操作
+function alignLever() {
+  // 按钮已由 CSS 定位，无需 JS 调整
+}
+
+// ══ Feed 广告瀑布流 ══════════════════════════
+// 广告页状态
+let adPageIdx = -1;          // 当前打开的广告 index
+let adPageTimer = null;      // 倒计时 interval
+let adPageRemain = 0;        // 剩余秒数
+let adPageDone = false;      // 是否已完成浏览
+
+function buildFeed() {
+  feedGrid.innerHTML = '';
+  FEED_ADS.forEach((ad, idx) => {
+    cardProgress[idx] = 0;
+    const card = document.createElement('div');
+    card.className = 'feed-card';
+    card.dataset.idx = idx;
+    card.innerHTML = `
+      <div class="feed-card-cover">
+        <div class="feed-card-cover-inner" style="background:${ad.bg}">
+          <div class="feed-card-emoji">${ad.emoji}</div>
+          <div class="feed-card-brand">${ad.brand}</div>
+        </div>
+      </div>
+      <div class="feed-card-body">
+        <div class="feed-card-title">${ad.title}</div>
+        <div class="feed-card-meta">
+          <span class="feed-card-tag">${ad.tag}</span>
+          <span class="feed-card-view-tip">点击浏览 +1次</span>
+        </div>
+      </div>
+      <div class="feed-card-progress">
+        <div class="feed-card-progress-fill" id="card-prog-${idx}"></div>
+      </div>
+      <div class="feed-card-badge">+1次</div>
+    `;
+    // 点击跳转广告页
+    card.addEventListener('click', () => onCardClick(idx));
+    feedGrid.appendChild(card);
+  });
+  updateChancesUI();
+}
+
+// 点击广告卡片 → 跳转广告页
+function onCardClick(idx) {
+  if (cardProgress[idx] >= 1) return; // 已看完，不重复
+  const ad = FEED_ADS[idx];
+  adPageIdx = idx;
+  adPageDone = false;
+
+  // 填充广告页内容
+  const page = document.getElementById('ad-page');
+  document.getElementById('ad-page-hero-emoji').textContent = ad.emoji;
+  document.getElementById('ad-page-brand-name').textContent = ad.brand;
+  document.getElementById('ad-page-title').textContent = ad.title;
+  document.getElementById('ad-page-desc').textContent =
+    `${ad.brand}为您精选优质服务，新用户专享超值优惠，立即体验吧！`;
+  document.getElementById('ad-page-hero').style.background = ad.bg;
+
+  // 重置进度
+  document.getElementById('ad-page-progress-fill').style.width = '0%';
+  document.getElementById('ad-page-progress-text').textContent = '浏览广告中，请稍候…';
+  const rewardHint = document.getElementById('ad-page-reward-hint');
+  rewardHint.classList.remove('show');
+
+  // 重置返回按钮状态
+  const backBtn = document.getElementById('ad-page-back');
+  backBtn.style.opacity = '0.4';
+  backBtn.style.pointerEvents = 'none';
+
+  // 显示广告页
+  page.classList.add('show');
+
+  // 开始倒计时
+  adPageRemain = ad.viewSec;
+  document.getElementById('ad-page-timer').textContent = adPageRemain + 's';
+  if (adPageTimer) clearInterval(adPageTimer);
+
+  const totalSec = ad.viewSec;
+  adPageTimer = setInterval(() => {
+    adPageRemain--;
+    const timerEl = document.getElementById('ad-page-timer');
+    const progFill = document.getElementById('ad-page-progress-fill');
+    const progText = document.getElementById('ad-page-progress-text');
+
+    if (timerEl) timerEl.textContent = adPageRemain + 's';
+    const pct = ((totalSec - adPageRemain) / totalSec * 100).toFixed(1);
+    if (progFill) progFill.style.width = pct + '%';
+
+    if (adPageRemain <= 0) {
+      clearInterval(adPageTimer);
+      adPageTimer = null;
+      adPageDone = true;
+      // 解锁返回按钮
+      if (backBtn) { backBtn.style.opacity = '1'; backBtn.style.pointerEvents = 'all'; }
+      if (timerEl) timerEl.textContent = '✓';
+      if (progFill) progFill.style.width = '100%';
+      if (progText) progText.textContent = '浏览完成！';
+      if (rewardHint) rewardHint.classList.add('show');
+    } else {
+      if (progText) progText.textContent = `还需浏览 ${adPageRemain} 秒…`;
+    }
+  }, 1000);
+}
+
+// 广告页返回按钮
+function onAdPageBack() {
+  if (!adPageDone) return; // 未完成不允许返回
+  const page = document.getElementById('ad-page');
+  page.classList.remove('show');
+  if (adPageTimer) { clearInterval(adPageTimer); adPageTimer = null; }
+
+  // 标记该卡片已看完，发放次数
+  onCardWatched(adPageIdx);
+  adPageIdx = -1;
+}
+
+function onCardWatched(idx) {
+  cardProgress[idx] = 1;
+  const fill = document.getElementById(`card-prog-${idx}`);
+  if (fill) fill.style.width = '100%';
+  const card = feedGrid.querySelector(`[data-idx="${idx}"]`);
+  if (card) card.classList.add('watched');
+  // 增加抽奖次数
+  freeChances++;
+  updateChancesUI();
+  // 次数角标弹出动画
+  const badge = card ? card.querySelector('.feed-card-badge') : null;
+  if (badge) {
+    badge.style.animation = 'none';
+    void badge.offsetWidth;
+    badge.style.animation = '';
+  }
+}
+
+function updateChancesUI() {
+  if (chancesCount) chancesCount.textContent = freeChances;
+  // 按钮标签显示剩余次数
+  if (leverLabel) {
+    leverLabel.textContent = freeChances > 0 ? `还剩 ${freeChances} 次` : '点击抽奖';
+  }
+}
+
+// ══ 待机：生成漂浮球体 ══════════════════════
+function buildIdleBalls() {
+  const chamberW = 240, chamberH = 150;
+  const SIZE = 40;
+  // 网格分布：5列×2行，确保不重叠
+  const cols = 5, rows = 2;
+  const cellW = chamberW / cols, cellH = chamberH / rows;
+
+  for (let i = 0; i < BALL_POOL.length; i++) {
+    const ball = document.createElement('div');
+    ball.className = 'idle-ball';
+    const item = BALL_POOL[i];
+    const col = i % cols, row = Math.floor(i / cols);
+    // 在格子内随机偏移，但不超出格子
+    const maxOffX = Math.max(0, cellW - SIZE - 4);
+    const maxOffY = Math.max(0, cellH - SIZE - 4);
+    const x = col * cellW + 2 + Math.random() * maxOffX;
+    const y = row * cellH + 2 + Math.random() * maxOffY;
+    const dur = 2.8 + Math.random() * 2.2;
+    const delay = -(Math.random() * dur);
+    const fx = (Math.random() - 0.5) * 16;
+    const fy = (Math.random() - 0.5) * 12;
+    const fr = (Math.random() - 0.5) * 18;
+    ball.style.cssText = `
+      width:${SIZE}px;height:${SIZE}px;
+      left:${x}px;top:${y}px;
+      background:${item.bg};
+      box-shadow:0 4px 14px rgba(0,0,0,0.4),0 0 10px ${item.shadow}66,
+        inset 0 -3px 6px rgba(0,0,0,0.3),inset 0 3px 6px rgba(255,255,255,0.2);
+      --dur:${dur}s;--delay:${delay}s;
+      --fx:${fx}px;--fy:${fy}px;--fr:${fr}deg;
+      animation-delay:${delay}s;
+    `;
+    // icon
+    const iconEl = document.createElement('div');
+    iconEl.className = 'ball-icon';
+    iconEl.textContent = item.icon;
+    // 数量标签
+    const labelEl = document.createElement('div');
+    labelEl.className = 'ball-label';
+    labelEl.textContent = item.label;
+    ball.appendChild(iconEl);
+    ball.appendChild(labelEl);
+    ballChamber.appendChild(ball);
+  }
+}
+
+// ══ 摇杆点击 ══════════════════════════════
+function onLeverClick() {
+  if (gameState !== 'IDLE') return;
+  // 没有抽奖次数时，摇杆抖动提示去看广告
+  if (freeChances <= 0) {
+    leverArea.style.animation = 'stageShake 0.3s ease-out';
+    setTimeout(() => { leverArea.style.animation = ''; }, 310);
+    // 提示文字闪烁
+    if (leverLabel) {
+      leverLabel.textContent = '先看广告！';
+      setTimeout(() => updateChancesUI(), 1200);
+    }
+    return;
+  }
+  gameState = 'SPIN';
+  // 消耗一次次数
+  freeChances--;
+  updateChancesUI();
+
+  // 隐藏手指引导和提示文本
+  if (fingerGuide) fingerGuide.classList.add('hidden');
+  if (pullHint) pullHint.style.opacity = '0';
+
+  // 摇杆下拉动画
+  leverArea.classList.add('pulled');
+  leverArea.style.pointerEvents = 'none';
+  leverLabel.textContent = '抽奖中...';
+
+  // 舞台变色
+  stage.className = 'phase-spin';
+
+  // 淡出漂浮球，启动碰撞动效
+  setTimeout(() => {
+    Array.from(ballChamber.querySelectorAll('.idle-ball')).forEach(b => {
+      b.style.opacity = '0';
+      setTimeout(() => b.remove(), 300);
+    });
+    startChaosBalls();
+  }, 300);
+}
+
+// ── 碰撞球体动效 ──────────────────────────
+function startChaosBalls() {
+  Array.from(ballChamber.querySelectorAll('.chaos-ball')).forEach(b => b.remove());
+  chaosBalls = [];
+
+  const W = 240, H = 150;
+  const SIZE = 40; // 与待机球一致
+  const r = SIZE / 2;
+
+  for (let i = 0; i < BALL_POOL.length; i++) {
+    const item = BALL_POOL[i];
+    const el = document.createElement('div');
+    el.className = 'chaos-ball';
+    el.style.cssText = `
+      position:absolute;
+      width:${SIZE}px;height:${SIZE}px;border-radius:50%;
+      background:${item.bg};
+      box-shadow:0 4px 14px rgba(0,0,0,0.4),0 0 10px ${item.shadow}66,
+        inset 0 -3px 6px rgba(0,0,0,0.3),inset 0 3px 6px rgba(255,255,255,0.2);
+      will-change:transform;pointer-events:none;
+    `;
+    // 高光
+    const shine = document.createElement('div');
+    shine.style.cssText = `
+      position:absolute;top:12%;left:18%;
+      width:36%;height:26%;border-radius:50%;
+      background:rgba(255,255,255,0.28);filter:blur(2px);pointer-events:none;
+    `;
+    // icon
+    const iconEl = document.createElement('div');
+    iconEl.className = 'ball-icon';
+    iconEl.textContent = item.icon;
+    // 数量标签
+    const labelEl = document.createElement('div');
+    labelEl.className = 'ball-label';
+    labelEl.textContent = item.label;
+    el.appendChild(shine);
+    el.appendChild(iconEl);
+    el.appendChild(labelEl);
+    ballChamber.appendChild(el);
+
+    const x = r + Math.random() * (W - SIZE);
+    const y = r + Math.random() * (H - SIZE);
+    const angle = Math.random() * Math.PI * 2;
+    const spd = 1.5 + Math.random() * 2;
+    chaosBalls.push({
+      el, r, x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      rot: Math.random() * 360,
+      rotSpd: (Math.random() - 0.5) * 4,
+    });
+    el.style.left = (x - r) + 'px';
+    el.style.top  = (y - r) + 'px';
+  }
+
+  const TOTAL = 3800, ACCEL_END = 1600, FAST_END = 2800, MAX_MUL = 9;
+  const t0 = performance.now();
+
+  // 震动
+  setTimeout(() => {
+    stage.style.animation = 'stageShake 0.4s ease-out';
+    setTimeout(() => { stage.style.animation = ''; }, 410);
+  }, 500);
+  setTimeout(() => {
+    stage.style.animation = 'stageShake 0.5s ease-out';
+    setTimeout(() => { stage.style.animation = ''; }, 510);
+  }, 1700);
+
+  function tick(now) {
+    const e = now - t0;
+    let mul;
+    if      (e < ACCEL_END) { mul = 1 + (MAX_MUL - 1) * easeInQuad(e / ACCEL_END); }
+    else if (e < FAST_END)  { mul = MAX_MUL; }
+    else if (e < TOTAL)     { mul = MAX_MUL * (1 - easeOutQuad((e - FAST_END) / (TOTAL - FAST_END))) + 0.3; }
+    else {
+      chaosBalls.forEach(b => { b.el.style.filter = ''; });
+      chaosRaf = null;
+      onSpinStop();
+      return;
+    }
+
+    // 虚影 blur
+    let blurPx = 0;
+    if (e > ACCEL_END && e < FAST_END) {
+      blurPx = Math.min(5, (e - ACCEL_END) / (FAST_END - ACCEL_END) * 7);
+    } else if (e >= FAST_END && e < TOTAL) {
+      blurPx = Math.max(0, 5 * (1 - (e - FAST_END) / (TOTAL - FAST_END) * 1.6));
+    }
+
+    for (let i = 0; i < chaosBalls.length; i++) {
+      const b = chaosBalls[i];
+      b.x += b.vx * mul;
+      b.y += b.vy * mul;
+      b.rot += b.rotSpd * mul;
+
+      // 边界反弹
+      if (b.x - b.r < 0)   { b.x = b.r;     b.vx =  Math.abs(b.vx) + Math.random() * 0.2; }
+      if (b.x + b.r > W)   { b.x = W - b.r; b.vx = -(Math.abs(b.vx) + Math.random() * 0.2); }
+      if (b.y - b.r < 0)   { b.y = b.r;     b.vy =  Math.abs(b.vy) + Math.random() * 0.2; }
+      if (b.y + b.r > H)   { b.y = H - b.r; b.vy = -(Math.abs(b.vy) + Math.random() * 0.2); }
+
+      // 球间碰撞
+      for (let j = i + 1; j < chaosBalls.length; j++) {
+        const c = chaosBalls[j];
+        const dx = c.x - b.x, dy = c.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minD = b.r + c.r;
+        if (dist < minD && dist > 0.01) {
+          const ov = (minD - dist) / 2;
+          const nx = dx / dist, ny = dy / dist;
+          b.x -= nx * ov; b.y -= ny * ov;
+          c.x += nx * ov; c.y += ny * ov;
+          const dot = (b.vx - c.vx) * nx + (b.vy - c.vy) * ny;
+          if (dot > 0) {
+            b.vx -= dot * nx * 0.95; b.vy -= dot * ny * 0.95;
+            c.vx += dot * nx * 0.95; c.vy += dot * ny * 0.95;
+          }
+        }
+      }
+
+      b.el.style.left = (b.x - b.r) + 'px';
+      b.el.style.top  = (b.y - b.r) + 'px';
+      b.el.style.transform = `rotate(${b.rot}deg)`;
+      b.el.style.filter = blurPx > 0 ? `blur(${blurPx}px)` : '';
+    }
+
+    chaosRaf = requestAnimationFrame(tick);
+  }
+  chaosRaf = requestAnimationFrame(tick);
+}
+
+function easeInQuad(t) { return t * t; }
+function easeOutQuad(t) { return 1 - (1 - t) * (1 - t); }
+
+// ── 滚动停止 → 光芒爆发 ──────────────────
+function onSpinStop() {
+  gameState = 'FLASH';
+  stage.className = 'phase-flash';
+
+  // 在这里就确定本次奖励，出球和结算球颜色保持一致（演示顺序：第1次水滴，第2次水果，后续随机）
+  pendingReward = pickDemoReward();
+
+  // 摇杆复位
+  leverArea.classList.remove('pulled');
+
+  // 清理碰撞球
+  chaosBalls.forEach(b => b.el.remove());
+  chaosBalls = [];
+
+  // 选中框闪烁
+  spinSelector.style.animation = 'ringPulse 0.3s ease-in-out 4';
+
+  // 机器震动
+  stage.style.animation = 'stageShake 0.5s ease-out';
+  setTimeout(() => { stage.style.animation = ''; }, 510);
+
+  // 粒子爆发（从机器中心）
+  spawnParticles(140, 200, 2);
+  spawnBeams(140, 200);
+
+  // 光芒爆发
+  setTimeout(() => {
+    flashBurst.style.transition = 'opacity 0.08s ease-out';
+    flashBurst.style.opacity = '1';
+    setTimeout(() => {
+      flashBurst.style.transition = 'opacity 0.7s ease-out';
+      flashBurst.style.opacity = '0';
+    }, 80);
+  }, 200);
+
+  // 出球动效：用已确定的奖励颜色
+  setTimeout(() => launchEjectBall(pendingReward), 350);
+
+  // 进入结算
+  setTimeout(() => enterSettle(), 1400);
+}
+
+// ── 出球动效 ──────────────────────────────
+function launchEjectBall(reward) {
+  const color = reward || BALL_COLORS[Math.floor(Math.random() * BALL_COLORS.length)];
+  // reward 来自 REWARD_POOL，bg 字段名是 ballBg；BALL_COLORS 直接有 bg
+  const bg     = color.ballBg || color.bg;
+  const shadow = color.ballShadow || color.shadow;
+  ejectBall.style.cssText = `
+    background:${bg};
+    box-shadow:0 0 30px ${shadow},0 0 60px ${shadow}88,
+      inset 0 -4px 10px rgba(0,0,0,0.3),inset 0 4px 10px rgba(255,255,255,0.25);
+    left:140px;top:310px;
+    transform:translate(-50%,-50%) scale(0.5);
+    opacity:0;
+    transition:all 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    position:absolute;z-index:40;
+    width:60px;height:60px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:28px;pointer-events:none;
+  `;
+  ejectBall.textContent = reward ? reward.icon : '✨';
+  // 飞出
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ejectBall.style.opacity = '1';
+    ejectBall.style.transform = 'translate(-50%,-50%) scale(1.2)';
+    ejectBall.style.top = '220px';
+    setTimeout(() => {
+      ejectBall.style.transition = 'all 0.4s ease-in';
+      ejectBall.style.transform = 'translate(-50%,-50%) scale(0.3)';
+      ejectBall.style.opacity = '0';
+      ejectBall.style.top = '400px';
+    }, 650);
+  }));
+}
+
+// ══ 结算界面 ══════════════════════════════
+function enterSettle() {
+  gameState = 'SETTLE';
+
+  // pendingReward 已在 onSpinStop 里确定，直接同步颜色到结算球
+  const ball = document.getElementById('mystery-ball');
+  if (ball) {
+    ball.style.background = pendingReward.ballBg;
+    ball.style.boxShadow = [
+      `0 0 40px ${pendingReward.ballShadow}`,
+      `0 0 80px ${pendingReward.ballShadow}88`,
+      'inset 0 -8px 20px rgba(0,0,0,0.4)',
+      'inset 0 8px 20px rgba(255,255,255,0.15)',
+    ].join(',');
+    // 同步 icon
+    const icon = document.getElementById('mystery-ball-icon');
+    if (icon) icon.textContent = pendingReward.icon;
+  }
+
+  // 隐藏机器
+  machineWrap.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+  machineWrap.style.opacity = '0';
+  machineWrap.style.transform = 'scale(0.9) translateY(10px)';
+  titleArea.style.transition = 'opacity 0.3s ease';
+  titleArea.style.opacity = '0';
+
+  setTimeout(() => {
+    machineWrap.style.display = 'none';
+    titleArea.style.display = 'none';
+    settleScreen.classList.add('show');
+    document.getElementById('mystery-ball').onclick = onBallClick;
+  }, 400);
+}
+
+// ══ 点击球开奖 ════════════════════════════
+function onBallClick() {
+  if (gameState !== 'SETTLE') return;
+  gameState = 'OPEN';
+
+  const reward = pendingReward;
+
+  // 隐藏手指引导
+  const finger = document.getElementById('settle-finger');
+  if (finger) { finger.style.opacity = '0'; finger.style.transition = 'opacity 0.15s'; }
+
+  // 球体爆炸消失
+  const ball = document.getElementById('mystery-ball');
+  if (ball) {
+    ball.style.transition = 'transform 0.15s ease-in, opacity 0.25s ease-in 0.08s';
+    ball.style.transform  = 'scale(1.6)';
+    setTimeout(() => { ball.style.transform = 'scale(0)'; ball.style.opacity = '0'; }, 150);
+  }
+
+  // 启动全屏特效层
+  const overlay = document.getElementById('burst-overlay');
+  const flashEl = document.getElementById('burst-flash');
+  const canvas  = document.getElementById('burst-canvas');
+  const textEl  = document.getElementById('burst-text');
+  overlay.classList.add('active');
+
+  const W = canvas.width  = window.innerWidth;
+  const H = canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const cx = W / 2, cy = H / 2;
+
+  // 白色闪光
+  flashEl.style.transition = 'none';
+  flashEl.style.opacity = '1';
+  setTimeout(() => { flashEl.style.transition = 'opacity 0.4s ease-out'; flashEl.style.opacity = '0'; }, 50);
+
+  let raf;
+  const TOTAL_MS = 1600; // 特效总时长
+
+  if (reward.type === 'drop') {
+    // ══════════════════════════════════════
+    // 水滴奖励：下雨特效
+    // ══════════════════════════════════════
+    const drops = [];
+    const splashes = [];
+    let elapsed = 0;
+    let lastTime = null;
+
+    // 预生成一批雨滴（分批延迟入场）
+    const TOTAL_DROPS = 90;
+    for (let i = 0; i < TOTAL_DROPS; i++) {
+      drops.push({
+        x: Math.random() * W,
+        y: -20 - Math.random() * H * 0.8,   // 从屏幕上方不同高度开始
+        vy: 8 + Math.random() * 10,
+        len: 14 + Math.random() * 18,        // 雨线长度
+        alpha: 0.55 + Math.random() * 0.45,
+        delay: Math.random() * 600,          // 0~600ms 延迟入场
+        born: false,
+        dead: false,
+      });
+    }
+
+    // 中心大水滴（奖励主体）：从上方落下，最后停在中心
+    const bigDrop = {
+      x: cx, y: -80,
+      vy: 0, targetY: cy - 30,
+      phase: 'fall',   // fall → bounce → settle
+      scale: 1, alpha: 0,
+      bounceCount: 0,
+    };
+
+    function drawRainFrame(ts) {
+      if (!lastTime) lastTime = ts;
+      elapsed = ts - lastTime;
+      ctx.clearRect(0, 0, W, H);
+
+      // ── 背景蓝色光晕（营造雨天氛围）
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * 0.7);
+      grad.addColorStop(0, 'rgba(0,160,255,0.10)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // ── 普通雨滴
+      drops.forEach(d => {
+        if (d.dead) return;
+        if (elapsed < d.delay) return;
+        d.born = true;
+        d.y += d.vy;
+
+        if (d.y > H + 10) {
+          // 落地溅起水花
+          splashes.push({ x: d.x, y: H - 4, r: 0, maxR: 6 + Math.random() * 8, alpha: 0.7 });
+          d.dead = true;
+          return;
+        }
+
+        // 画雨线
+        ctx.save();
+        ctx.globalAlpha = d.alpha * Math.min(1, (elapsed - d.delay) / 200);
+        ctx.strokeStyle = '#88ddff';
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = '#00aaff';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - 2, d.y - d.len);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // ── 水花溅射
+      for (let i = splashes.length - 1; i >= 0; i--) {
+        const s = splashes[i];
+        s.r += 1.2;
+        s.alpha -= 0.06;
+        if (s.alpha <= 0) { splashes.splice(i, 1); continue; }
+        ctx.save();
+        ctx.globalAlpha = s.alpha;
+        ctx.strokeStyle = '#55ccff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, Math.PI, Math.PI * 2); // 半圆溅射
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // ── 中心大水滴物理
+      if (bigDrop.phase === 'fall') {
+        bigDrop.alpha = Math.min(1, bigDrop.alpha + 0.05);
+        bigDrop.vy += 1.6;
+        bigDrop.y  += bigDrop.vy;
+        if (bigDrop.y >= bigDrop.targetY) {
+          bigDrop.y = bigDrop.targetY;
+          bigDrop.vy = -bigDrop.vy * 0.4;
+          bigDrop.phase = 'bounce';
+        }
+      } else if (bigDrop.phase === 'bounce') {
+        bigDrop.vy += 1.2;
+        bigDrop.y  += bigDrop.vy;
+        if (bigDrop.y >= bigDrop.targetY) {
+          bigDrop.y = bigDrop.targetY;
+          bigDrop.bounceCount++;
+          if (bigDrop.bounceCount >= 2) {
+            bigDrop.phase = 'settle';
+          } else {
+            bigDrop.vy = -bigDrop.vy * 0.32;
+          }
+        }
+      } else {
+        bigDrop.scale = 1 + Math.sin(elapsed * 0.004) * 0.03;
+      }
+
+      // 画大水滴：用 canvas 路径绘制标准水滴形，不依赖 emoji 避免平台差异
+      const R = 36 * bigDrop.scale; // 水滴半径
+      const bx = bigDrop.x, by = bigDrop.y;
+      ctx.save();
+      ctx.globalAlpha = bigDrop.alpha;
+
+      // 外发光（先画一层模糊圆作为光晕）
+      ctx.shadowColor = '#00ccff';
+      ctx.shadowBlur  = 32;
+
+      // 水滴路径：圆底 + 尖顶
+      ctx.beginPath();
+      // 底部圆弧（从左到右，圆心在 by，半径 R）
+      ctx.arc(bx, by, R, 0, Math.PI);
+      // 左侧曲线到顶点
+      ctx.bezierCurveTo(bx - R, by - R * 0.3, bx - R * 0.25, by - R * 1.7, bx, by - R * 1.9);
+      // 右侧曲线回到起点
+      ctx.bezierCurveTo(bx + R * 0.25, by - R * 1.7, bx + R, by - R * 0.3, bx + R, by);
+      ctx.closePath();
+
+      // 渐变填充（在世界坐标系里创建，不受 scale 影响）
+      const dg = ctx.createRadialGradient(bx - R * 0.2, by - R * 0.5, R * 0.1, bx, by - R * 0.3, R * 1.6);
+      dg.addColorStop(0,   '#ccf0ff');
+      dg.addColorStop(0.3, '#33bbff');
+      dg.addColorStop(0.7, '#0077dd');
+      dg.addColorStop(1,   '#003399');
+      ctx.fillStyle = dg;
+      ctx.fill();
+
+      // 高光椭圆
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = bigDrop.alpha * 0.55;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(bx - R * 0.22, by - R * 0.9, R * 0.18, R * 0.32, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 数量文字（居中在水滴圆肚部分）
+      ctx.globalAlpha = bigDrop.alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.round(R * 0.7)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#0044aa';
+      ctx.shadowBlur = 6;
+      ctx.fillText(reward.amount, bx, by - R * 0.1);
+      ctx.restore();
+
+      if (elapsed < TOTAL_MS) {
+        raf = requestAnimationFrame(drawRainFrame);
+      } else {
+        ctx.clearRect(0, 0, W, H);
+        finishEffect();
+      }
+    }
+    raf = requestAnimationFrame(drawRainFrame);
+
+  } else {
+    // ══════════════════════════════════════
+    // 水果卡奖励：礼盒开口 → 水果飞入 → 盖子合上 → 发光庆祝
+    // 时间轴（总 2200ms）：
+    //   0~300ms   礼盒从中心弹出（开口状态）
+    //   300~1200ms 水果逐个从四周飞入盒中
+    //   1200~1600ms 盖子合上动画
+    //   1600~2200ms 礼盒发光脉冲 + 星光
+    // ══════════════════════════════════════
+    const FRUIT_EMOJIS = ['🍎','🍊','🍋','🍇','🍓','🍑','🍍','🥭','🍈','🍒'];
+    const PIECE_COUNT  = 16;
+    const BOX_W = 90, BOX_H = 80; // 礼盒尺寸（像素）
+    const LID_H = 28;              // 盖子高度
+
+    // 水果粒子：从屏幕四周边缘外飞入，起点更远更均匀
+    const fruitPieces = [];
+    for (let i = 0; i < PIECE_COUNT; i++) {
+      const angle = (i / PIECE_COUNT) * Math.PI * 2;
+      const dist  = Math.min(W, H) * 0.62 + Math.random() * 40;
+      fruitPieces.push({
+        sx: cx + Math.cos(angle) * dist,
+        sy: cy + Math.sin(angle) * dist,
+        emoji: FRUIT_EMOJIS[i % FRUIT_EMOJIS.length],
+        size: 24 + Math.random() * 10,
+        rot: Math.random() * 360,
+        rotSpd: (Math.random() - 0.5) * 10,
+        delay: 200 + i * 50,   // 200ms开始，间隔50ms
+        done: false,
+      });
+    }
+
+    // 礼盒状态
+    let boxScale = 0;          // 0→1 弹出
+    let lidDropT  = -1;        // -1=未开始, 0~1=落下进度, 2=已落定
+    let lidClosed  = false;
+    let glowPulse  = 0;
+    // 爆炸粒子（盖子合上时）
+    const burstParts = [];
+
+    let elapsed2 = 0, lastTime2 = null;
+    const TOTAL_MS2 = 3000;
+    let fruitTextShown = false;
+
+    function easeOutBounce(t) {
+      if (t < 1/2.75) return 7.5625*t*t;
+      if (t < 2/2.75) { t -= 1.5/2.75;   return 7.5625*t*t + 0.75; }
+      if (t < 2.5/2.75) { t -= 2.25/2.75; return 7.5625*t*t + 0.9375; }
+      t -= 2.625/2.75; return 7.5625*t*t + 0.984375;
+    }
+
+    // 用 canvas 路径画礼盒
+    // showLid: false=不画盖子(盒口开着), true=画盖子
+    // lidOffsetY: 盖子相对盒顶的 Y 偏移（落下动画用，0=正好盖上）
+    function drawBox(bx, by, sc, showLid, lidOffsetY, glow) {
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.scale(sc, sc);
+
+      const hw = BOX_W / 2, hh = BOX_H / 2;
+
+      // 外发光
+      ctx.shadowColor = '#FFD700';
+      ctx.shadowBlur  = glow;
+
+      // ── 盒身（橙色渐变）
+      const bodyGrad = ctx.createLinearGradient(-hw, -hh, hw, hh);
+      bodyGrad.addColorStop(0, '#FF9900');
+      bodyGrad.addColorStop(0.5, '#FFB800');
+      bodyGrad.addColorStop(1, '#E07000');
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.roundRect(-hw, -hh, BOX_W, BOX_H, 6);
+      ctx.fill();
+
+      // 盒身横向丝带
+      ctx.fillStyle = '#cc3300';
+      ctx.fillRect(-hw, -8, BOX_W, 16);
+      // 盒身竖向丝带
+      ctx.fillRect(-8, -hh, 16, BOX_H);
+
+      // 盒身边框
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(-hw, -hh, BOX_W, BOX_H, 6);
+      ctx.stroke();
+
+      // ── 盖子（从上方落下，lidOffsetY=0 时正好盖上）
+      if (showLid) {
+        ctx.save();
+        // 盖子中心位置：盒顶 -hh，再加上偏移
+        ctx.translate(0, -hh - LID_H / 2 + lidOffsetY);
+
+        const lidGrad = ctx.createLinearGradient(-hw, -LID_H / 2, hw, LID_H / 2);
+        lidGrad.addColorStop(0, '#FFB800');
+        lidGrad.addColorStop(1, '#FF8800');
+        ctx.fillStyle = lidGrad;
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur  = glow * 0.6;
+        ctx.beginPath();
+        ctx.roundRect(-hw - 4, -LID_H / 2, BOX_W + 8, LID_H, 5);
+        ctx.fill();
+
+        // 盖子丝带
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#cc3300';
+        ctx.fillRect(-8, -LID_H / 2, 16, LID_H);
+
+        // 蝴蝶结（落定后显示）
+        if (lidOffsetY >= -2) {
+          ctx.font = '20px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🎀', 0, 0);
+        }
+        ctx.restore();
+      }
+
+      ctx.restore(); // 整体
+    }
+
+    function drawFruitFrame(ts) {
+      if (!lastTime2) lastTime2 = ts;
+      elapsed2 = ts - lastTime2;
+      ctx.clearRect(0, 0, W, H);
+
+      // 背景暖色光晕
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * 0.65);
+      grad.addColorStop(0, 'rgba(255,160,0,0.13)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // ── 礼盒弹出（0~300ms）
+      const boxT = Math.min(1, elapsed2 / 300);
+      const easeBox = boxT < 0.5 ? 4 * boxT * boxT * boxT : 1 - Math.pow(-2 * boxT + 2, 3) / 2;
+      boxScale = easeBox;
+
+      // 盖子落下：1700ms 开始，300ms 内从高处落到盒顶
+      const LID_DROP_START = 1700;
+      const LID_DROP_DUR   = 300;
+      if (elapsed2 >= LID_DROP_START && lidDropT < 2) {
+        const raw = (elapsed2 - LID_DROP_START) / LID_DROP_DUR;
+        if (raw >= 1 && !lidClosed) {
+          lidDropT = 1;
+          lidClosed = true;
+          // 落定瞬间爆出粒子
+          for (let i = 0; i < 32; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = 3 + Math.random() * 7;
+            burstParts.push({
+              x: cx, y: cy - BOX_H / 2 * boxScale,
+              vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - 2,
+              color: ['#FFD700','#FF9900','#fff','#FF4444','#44FF88','#44aaff'][Math.floor(Math.random() * 6)],
+              size: 3 + Math.random() * 5,
+              alpha: 1, decay: 0.02 + Math.random() * 0.015,
+              gravity: 0.12,
+            });
+          }
+        } else {
+          lidDropT = Math.min(1, raw);
+        }
+      }
+      if (lidClosed) {
+        glowPulse = 22 + Math.sin(elapsed2 * 0.007) * 18;
+      }
+
+      // 盖子 Y 偏移：从 -200px（屏幕外上方）弹性落到 0（盒顶）
+      const lidShowNow = elapsed2 >= LID_DROP_START;
+      const lidOffY = lidShowNow
+        ? (lidDropT >= 1 ? 0 : -200 * (1 - easeOutBounce(lidDropT)))
+        : 0;
+
+      // ── 先画礼盒（底层），水果粒子在上层飞入可见
+      drawBox(cx, cy, boxScale, lidShowNow, lidOffY, glowPulse);
+
+      // ── 水果粒子飞入（绘制在礼盒上方）
+      fruitPieces.forEach(p => {
+        if (p.done || elapsed2 < p.delay) return;
+        const t = Math.min(1, (elapsed2 - p.delay) / 500);
+        p.rot += p.rotSpd * (1 - t * 0.8);
+        const ease = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2; // easeInOut
+        const px = p.sx + (cx - p.sx) * ease;
+        const py = p.sy + ((cy - BOX_H * 0.35) - p.sy) * ease;
+        const shrink = t > 0.75 ? 1 - (t - 0.75) / 0.25 : 1;
+        if (t >= 1) { p.done = true; return; }
+        const drawSize = p.size * (0.4 + shrink * 0.6);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0.1, shrink);
+        ctx.translate(px, py);
+        ctx.rotate(p.rot * Math.PI / 180);
+        ctx.font = `${drawSize}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255,160,0,0.7)';
+        ctx.shadowBlur = 10;
+        ctx.fillText(p.emoji, 0, 0);
+        ctx.restore();
+      });
+
+      // ── 合上时的爆炸粒子
+      for (let i = burstParts.length - 1; i >= 0; i--) {
+        const p = burstParts[i];
+        p.x += p.vx; p.y += p.vy;
+        p.vy += p.gravity;
+        p.alpha -= p.decay;
+        if (p.alpha <= 0) { burstParts.splice(i, 1); continue; }
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = p.size * 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // ── 盖子合上后的旋转星光 + 文字触发
+      if (lidClosed) {
+        ctx.save();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + elapsed2 * 0.0025;
+          const r = 72 + Math.sin(elapsed2 * 0.006 + i) * 12;
+          const sx = cx + Math.cos(a) * r;
+          const sy = cy + Math.sin(a) * r;
+          ctx.globalAlpha = 0.5 + Math.sin(elapsed2 * 0.007 + i * 1.1) * 0.5;
+          ctx.font = '16px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = '#FFD700';
+          ctx.shadowBlur = 10;
+          ctx.fillText('✨', sx, sy);
+        }
+        ctx.restore();
+        // 盖子合上后触发文字弹出（只触发一次）
+        if (!fruitTextShown) {
+          fruitTextShown = true;
+          textEl.style.color = '#FFD700';
+          textEl.textContent = reward.label;
+          setTimeout(() => { textEl.classList.add('pop'); }, 100);
+          setTimeout(() => {
+            textEl.style.transition = 'opacity 0.4s ease-in';
+            textEl.style.opacity = '0';
+          }, 900);
+        }
+      }
+
+      if (elapsed2 < TOTAL_MS2) {
+        raf = requestAnimationFrame(drawFruitFrame);
+      } else {
+        ctx.clearRect(0, 0, W, H);
+        finishEffect();
+      }
+    }
+    raf = requestAnimationFrame(drawFruitFrame);
+  }
+
+  // ── 大文字弹出
+  // 水果类型：文字由动画内部 fruitTextShown 在盖子合上后触发
+  // 水滴类型：此处用 setTimeout 触发
+  const effectEnd  = reward.type === 'drop' ? TOTAL_MS : 3000;
+  if (reward.type === 'drop') {
+    // 水滴：直接用 setTimeout 触发文字
+    textEl.style.color = '#44ccff';
+    textEl.textContent = `${reward.icon}  ${reward.label}`;
+    setTimeout(() => { textEl.classList.add('pop'); }, 500);
+    setTimeout(() => {
+      textEl.style.transition = 'opacity 0.3s ease-in';
+      textEl.style.opacity = '0';
+    }, 1100);
+  }
+  // 水果类型：文字由动画内部 fruitTextShown 在盖子合上后触发，此处不重复设置
+
+  // ── 收尾：关闭特效层，切换奖励界面
+  function finishEffect() {
+    cancelAnimationFrame(raf);
+    overlay.classList.remove('active');
+    textEl.classList.remove('pop');
+    textEl.style.opacity = '';
+    textEl.style.transition = '';
+    openRewardBall(reward);
+  }
+  setTimeout(finishEffect, effectEnd + 80);
+}
+
+// ══ 打开奖励球 ════════════════════════════
+function openRewardBall(reward) {
+  gameState = 'REWARD';
+
+  // 累积本次奖励
+  totalRewards.push({ type: reward.type, icon: reward.icon, label: reward.label, amount: reward.amount });
+  if (reward.type === 'drop') {
+    totalDrops += reward.amount || 0;
+  } else if (reward.type === 'card') {
+    totalCards += reward.amount || 1;
+  }
+
+  // 填充大图标区域
+  if (rewardIconBig) {
+    rewardIconBig.textContent = reward.icon;
+    rewardIconBig.style.filter = `drop-shadow(0 0 22px ${reward.ballShadow}) drop-shadow(0 4px 12px rgba(0,0,0,0.5))`;
+  }
+  rewardAmountBig.textContent = reward.label;
+  rewardUnitBig.textContent   = reward.type === 'drop' ? '水滴' : '水果卡';
+
+  // 更新累计获得卡片
+  updateRewardTotal();
+
+  // 显示奖励界面
+  setTimeout(() => {
+    settleScreen.classList.remove('show');
+    rewardScreen.classList.add('show');
+    updateContinueBtn();
+    startCountdown();
+    replayBtn.style.display = 'block';
+  }, 500);
+}
+
+// 更新「本次/累计获得」卡片
+function updateRewardTotal() {
+  const titleEl = document.getElementById('reward-total-title');
+  const itemsEl = document.getElementById('reward-total-items');
+  if (!itemsEl) return;
+
+  if (titleEl) titleEl.textContent = totalRewards.length <= 1 ? '本次获得' : '累计获得';
+
+  let html = '';
+  if (totalDrops > 0) {
+    html += `
+      <div class="reward-total-item">
+        <div class="reward-total-item-left"><span>💧</span><span>水滴</span></div>
+        <span class="reward-total-item-val">${totalDrops}</span>
+      </div>`;
+  }
+  if (totalCards > 0) {
+    html += `
+      <div class="reward-total-item">
+        <div class="reward-total-item-left"><span>🎁</span><span>水果卡（一箱水果）</span></div>
+        <span class="reward-total-item-val card-val">${totalCards}</span>
+      </div>`;
+  }
+  itemsEl.innerHTML = html;
+}
+
+// 更新「继续抽奖」按钮显示状态
+function updateContinueBtn() {
+  const btn = document.getElementById('btn-continue');
+  const countEl = document.getElementById('btn-continue-count');
+  if (!btn) return;
+  if (freeChances > 0) {
+    btn.style.display = 'block';
+    if (countEl) countEl.textContent = `(还剩 ${freeChances} 次)`;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+// 继续抽奖：隐藏奖励界面，回到主界面重新抽
+function continueDrawing() {
+  if (freeChances <= 0) return;
+  // 重置结算界面状态，以便下次使用
+  const ballWrap = document.getElementById('mystery-ball-wrap');
+  if (ballWrap) { ballWrap.style.transform = ''; ballWrap.style.opacity = ''; }
+  const ball = document.getElementById('mystery-ball');
+  if (ball) {
+    ball.style.transition = 'none';
+    ball.style.transform  = '';
+    ball.style.opacity    = '';
+    setTimeout(() => { ball.style.transition = ''; }, 50);
+  }
+  settleScreen.classList.remove('show');
+  rewardScreen.classList.remove('show');
+
+  // 重置奖励标题
+  document.getElementById('reward-title').textContent = '🎉 恭喜获得！';
+
+  // 恢复主界面
+  machineWrap.style.display = '';
+  machineWrap.style.opacity = '1';
+  machineWrap.style.transform = '';
+  titleArea.style.display = '';
+  titleArea.style.opacity = '1';
+  if (pullHint) pullHint.style.opacity = '1';
+  replayBtn.style.display = 'none';
+
+  // 重建球仓
+  ballChamber.innerHTML = '';
+  buildIdleBalls();
+  alignLever();
+
+  // 恢复摇杆
+  leverArea.classList.remove('pulled');
+  leverArea.style.pointerEvents = '';
+  stage.className = '';
+  gameState = 'IDLE';
+  updateChancesUI();
+  updateContinueBtn();
+}
+
+// ══ 进入果园 ══════════════════════════════
+function enterOrchard() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  // 多次抽奖时先弹汇总弹窗
+  if (totalRewards.length > 1) {
+    showSummary();
+  } else {
+    doEnterOrchard();
+  }
+}
+
+function showSummary() {
+  // 填充水滴行
+  const dropValEl = document.getElementById('summary-drop-val');
+  const cardValEl = document.getElementById('summary-card-val');
+  const cardRow   = document.getElementById('summary-card-row');
+  if (dropValEl) dropValEl.textContent = totalDrops;
+  if (cardValEl) cardValEl.textContent = totalCards;
+  // 有水果卡才显示水果卡行
+  if (cardRow) cardRow.style.display = totalCards > 0 ? 'flex' : 'none';
+
+  const overlay = document.getElementById('summary-overlay');
+  if (overlay) overlay.classList.add('show');
+}
+
+function confirmSummary() {
+  const overlay = document.getElementById('summary-overlay');
+  if (overlay) overlay.classList.remove('show');
+  doEnterOrchard();
+}
+
+function doEnterOrchard() {
+  enterOverlay.style.opacity = '1';
+  enterOverlay.style.pointerEvents = 'all';
+  enterOverlay.style.transition = 'opacity 0.5s ease';
+}
+
+// ── 倒计时 ────────────────────────────────
+function startCountdown() {
+  if (countdownTimer) return;
+  const fmt = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  urgencyCountdown.textContent = fmt(countdownSec);
+  countdownTimer = setInterval(() => {
+    countdownSec = Math.max(0, countdownSec - 1);
+    urgencyCountdown.textContent = fmt(countdownSec);
+    if (countdownSec === 0) clearInterval(countdownTimer);
+  }, 1000);
+}
+
+// ── 粒子系统 ──────────────────────────────
+function spawnParticles(cx, cy, level) {
+  const colorSets = [
+    ['#aa66ff','#cc88ff','#8844ee','#ffffff'],
+    ['#ff6622','#ff9944','#ffcc44','#ffffff'],
+    ['#FFD700','#FFEE88','#FF9900','#ffffff'],
+  ];
+  const colors = colorSets[Math.min(level, 2)];
+  const count = [20, 32, 50][Math.min(level, 2)];
+
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'spark';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 60 + Math.random() * 120;
+    const size = 3 + Math.random() * 7;
+    el.style.cssText = `
+      left:${cx}px;top:${cy}px;
+      width:${size}px;height:${size}px;
+      border-radius:${Math.random() > 0.4 ? '50%' : '2px'};
+      background:${colors[Math.floor(Math.random() * colors.length)]};
+      box-shadow:0 0 ${size * 2}px ${colors[0]};
+      --tx:${Math.cos(angle) * dist}px;
+      --ty:${Math.sin(angle) * dist}px;
+      --dur:${0.5 + Math.random() * 0.7}s;
+    `;
+    particlesEl.appendChild(el);
+    setTimeout(() => el.remove(), 1400);
+  }
+
+  // 彩带（level 2）
+  if (level >= 2) {
+    const confettiColors = ['#FFD700','#FF6622','#aa44ff','#00ccff','#ff44aa','#44ff88'];
+    for (let i = 0; i < 40; i++) {
+      const el = document.createElement('div');
+      el.className = 'confetti';
+      const w = 5 + Math.random() * 9;
+      const h = 3 + Math.random() * 5;
+      el.style.cssText = `
+        left:${cx + (Math.random() - 0.5) * 80}px;top:${cy - 20}px;
+        width:${w}px;height:${h}px;border-radius:2px;
+        background:${confettiColors[Math.floor(Math.random() * confettiColors.length)]};
+        --tx:${(Math.random() - 0.5) * 260}px;
+        --ty:${80 + Math.random() * 160}px;
+        --dur:${0.8 + Math.random() * 0.8}s;
+        --rot:${Math.random() * 720}deg;
+      `;
+      particlesEl.appendChild(el);
+      setTimeout(() => el.remove(), 1800);
+    }
+    // 多圈冲击波
+    for (let ring = 0; ring < 4; ring++) {
+      setTimeout(() => {
+        const sw = document.createElement('div');
+        sw.className = 'shockwave';
+        sw.style.cssText = `
+          left:${cx}px;top:${cy}px;
+          width:80px;height:80px;
+          border:2px solid ${colors[0]};
+          box-shadow:0 0 20px ${colors[0]},inset 0 0 20px ${colors[0]}44;
+        `;
+        particlesEl.appendChild(sw);
+        setTimeout(() => sw.remove(), 900);
+      }, ring * 150);
+    }
+  } else {
+    const sw = document.createElement('div');
+    sw.className = 'shockwave';
+    sw.style.cssText = `
+      left:${cx}px;top:${cy}px;
+      width:70px;height:70px;
+      border:2px solid ${colors[0]};
+      box-shadow:0 0 16px ${colors[0]};
+    `;
+    particlesEl.appendChild(sw);
+    setTimeout(() => sw.remove(), 900);
+  }
+}
+
+// ── 光束 ──────────────────────────────────
+function spawnBeams(cx, cy) {
+  const count = 14;
+  const colors = ['rgba(255,200,0,0.95)', 'rgba(255,240,100,0.8)'];
+  for (let i = 0; i < count; i++) {
+    const beam = document.createElement('div');
+    beam.className = 'beam';
+    const angle = (i / count) * 360;
+    const h = 130 + Math.random() * 200;
+    beam.style.cssText = `
+      left:${cx}px;bottom:${640 - cy}px;height:0;
+      background:linear-gradient(to top,${colors[0]},${colors[1]},transparent);
+      box-shadow:0 0 8px ${colors[0]};
+      transform-origin:bottom center;transform:rotate(${angle}deg);
+      --h:${h}px;--dur:${0.65 + Math.random() * 0.4}s;--delay:${Math.random() * 0.1}s;
+    `;
+    beamsEl.appendChild(beam);
+    setTimeout(() => beam.remove(), 1600);
+  }
+}
+
+// ── 背景星空 ──────────────────────────────
+function startBgCanvas() {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const stars = Array.from({ length: 90 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: 0.5 + Math.random() * 1.5,
+    a: Math.random(),
+    da: 0.003 + Math.random() * 0.008,
+    color: Math.random() > 0.6 ? '#aa88ff' : '#ffffff',
+  }));
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      s.a += s.da;
+      if (s.a > 1 || s.a < 0) s.da *= -1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = s.color;
+      ctx.globalAlpha = s.a * 0.7;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+</script>
+</body>
+</html>
