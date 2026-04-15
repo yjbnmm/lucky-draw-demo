@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -1195,7 +1195,7 @@ body{
       <!-- 手指引导 -->
       <div id="settle-finger">👆</div>
     </div>
-    <div id="mystery-label">点击球开启奖励</div>
+    <div id="mystery-label">点击任意位置开启奖励</div>
   </div>
 
   <!-- 广告跳转界面（全屏，模拟跳转到广告落地页） -->
@@ -1317,8 +1317,7 @@ body{
   <canvas id="burst-canvas"></canvas>
   <div id="burst-text"></div>
 </div>
-<script>
-/* ══════════════════════════════════════════
+<script>/* ══════════════════════════════════════════
    幸运抽奖机 · 状态机
    IDLE → SPIN → FLASH → SETTLE → OPEN → REWARD → ORCHARD
 ══════════════════════════════════════════ */
@@ -1959,7 +1958,7 @@ function enterSettle() {
     machineWrap.style.display = 'none';
     titleArea.style.display = 'none';
     settleScreen.classList.add('show');
-    document.getElementById('mystery-ball').onclick = onBallClick;
+    settleScreen.onclick = onBallClick;
   }, 400);
 }
 
@@ -1967,6 +1966,8 @@ function enterSettle() {
 function onBallClick() {
   if (gameState !== 'SETTLE') return;
   gameState = 'OPEN';
+  // 立即移除全屏点击，防止重复触发
+  settleScreen.onclick = null;
 
   const reward = pendingReward;
 
@@ -2754,7 +2755,6 @@ function startBgCanvas() {
   }
   draw();
 }
-
 </script>
 </body>
 </html>
